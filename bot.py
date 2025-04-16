@@ -1,56 +1,54 @@
 import telebot
-import os
-import tempfile
-import subprocess
-from keep_alive import keep_alive
+import requests
 
-TOKEN = "8025225779:AAHjpXQ9OZ3aoiv1pQn_tFQHezKDtza0Rgo"
-bot = telebot.TeleBot(TOKEN)
+# Dán trực tiếp token vào đây
+BOT_TOKEN = "6367532329:AAFzGAqQZ_f4VQqX7VbwAoQ7iqbFO07Hzqk"
 
-name_bot = "SpamVip"
+bot = telebot.TeleBot(BOT_TOKEN)
 
-@bot.message_handler(commands=['spam'])
-def spam(message):
-    params = message.text.split()[1:]
-    if len(params) != 2:
-        bot.reply_to(message, "Dùng như này nhé: /spam sdt số_lần")
+@bot.message_handler(commands=['fl'])
+def handle_fl_command(message):
+    args = message.text.split()
+    if len(args) < 2:
+        bot.reply_to(message, "Vui lòng nhập username. Ví dụ: /fl baohuydz158")
         return
 
-    sdt, count = params
-
-    if not count.isdigit():
-        bot.reply_to(message, "Vui lòng nhập số lần hợp lệ.")
-        return
-
-    count = int(count)
-
-    bot.send_message(message.chat.id, f'''
-┌──────⭓ {name_bot}
-│ Spam: Thành Công 
-│ Số Lần Spam Free: {count}
-│ Đang Tấn Công : {sdt}
-└─────────────
-    ''')
+    username = args[1]
+    api_url = f"https://ksjdjdmfmxm.x10.mx/api/fl.php?user={username}&key=4I1TK-YXQZ4-GNFPL8&info=true"
 
     try:
-        if not os.path.isfile("dec.py"):
-            bot.reply_to(message, "Không tìm thấy file script dec.py.")
-            return
+        response = requests.get(api_url)
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.RequestException as e:
+        bot.reply_to(message, f"Lỗi khi gọi API: {str(e)}")
+        return
+    except ValueError:
+        bot.reply_to(message, "API không trả về dữ liệu JSON hợp lệ.")
+        return
 
-        with open("dec.py", 'r', encoding='utf-8') as f:
-            script = f.read()
+    status_text = "✅ Thành công" if data.get('status') else "❌ Thất bại"
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as tmp:
-            tmp.write(script.encode('utf-8'))
-            temp_path = tmp.name
+    reply_text = (
+        f"<b>🏖️ Khu Vực:</b> {data.get('khu_vuc', 'N/A')}\n"
+        f"<b>👤 Tên:</b> {data.get('name', 'N/A')}\n"
+        f"<b>🆔 User ID:</b> {data.get('user_id', 'N/A')}\n"
+        f"<b>📅 Ngày tạo:</b> {data.get('create_time', 'N/A')}\n"
+        f"<b>📌 Username:</b> @{data.get('username', 'N/A')}\n"
+        f"<b>👥 Followers (Trước):</b> {data.get('followers_before', 0)}\n"
+        f"<b>👥 Followers (Sau):</b> {data.get('followers_after', 0)}\n"
+        f"<b>✨ Đã thêm:</b> {data.get('followers_add', 0)}\n"
+        f"<b>💬 Thông báo:</b> {data.get('message', '')}\n"
+        f"<b>🔍 Trạng thái:</b> {status_text}"
+    )
 
-        subprocess.Popen(["python", temp_path, sdt, str(count)])
-    except Exception as e:
-        bot.reply_to(message, f"Lỗi: {str(e)}")
+    avatar_url = data.get('avatar')
+    if avatar_url and avatar_url.startswith("http"):
+        bot.send_photo(message.chat.id, avatar_url)
 
-# Kích hoạt web server keep_alive
-keep_alive()
+    bot.send_message(message.chat.id, reply_text, parse_mode='HTML')
 
-# Chạy bot
-print("Bot đang chạy...")
-bot.polling()
+
+if __name__ == "__main__":
+    print("Bot is running...")
+    bot.polling()
