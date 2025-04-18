@@ -2,14 +2,13 @@ import time
 import requests
 import telebot
 from telebot.types import Message
-from keep_alive import keep_alive  # Gọi keep_alive Flask
+from keep_alive import keep_alive
 
-# Token bot Telegram (Bạn nên dùng biến môi trường trong thực tế)
+# TOKEN của bot Telegram
 API_TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
 bot = telebot.TeleBot(API_TOKEN)
 
-# Gọi keep_alive để giữ bot sống (hữu ích nếu deploy trên Replit hoặc nền tảng tương tự)
-keep_alive()
+keep_alive()  # Giữ bot hoạt động
 
 user_last_like_time = {}
 LIKE_COOLDOWN = 60
