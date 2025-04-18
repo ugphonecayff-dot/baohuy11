@@ -1,54 +1,104 @@
-import telebot
 import requests
+import time
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.constants import ChatAction
 
-# Dán trực tiếp token vào đây
-BOT_TOKEN = "6367532329:AAFzGAqQZ_f4VQqX7VbwAoQ7iqbFO07Hzqk"
+BOT_TOKEN = "6367532329:AAFzGAqQZ_f4VQqX7VbwAoQ7iqbFO07Hzqk"  # Thay bằng token thật
 
-bot = telebot.TeleBot(BOT_TOKEN)
-
-@bot.message_handler(commands=['fl'])
-def handle_fl_command(message):
-    args = message.text.split()
-    if len(args) < 2:
-        bot.reply_to(message, "Vui lòng nhập username. Ví dụ: /fl baohuydz158")
+# /likeff lệnh
+async def likeff(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❗ Vui lòng nhập đúng:\n/likeff <idgame>")
         return
 
-    username = args[1]
-    api_url = f"https://ksjdjdmfmxm.x10.mx/api/fl.php?user={username}&key=4I1TK-YXQZ4-GNFPL8&info=true"
+    idgame = context.args[0]
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    await update.message.reply_text("⏳ Đang xử lý lượt like...")
+
+    urllike = f"https://dichvukey.site/likeff2.php?key=vlong&uid={idgame}"
+    max_retries = 5
+
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(urllike, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            break
+        except requests.exceptions.RequestException:
+            if attempt == max_retries - 1:
+                await update.message.reply_text("❌ Server đang quá tải, vui lòng thử lại sau.")
+                return
+            time.sleep(5)
+        except ValueError:
+            await update.message.reply_text("❌ Phản hồi từ server không hợp lệ.")
+            return
+
+    if isinstance(data, dict) and "status" in data:
+        if data["status"] == 2:
+            await update.message.reply_text("⚠️ Bạn đã đạt giới hạn lượt like hôm nay, vui lòng thử lại sau.")
+            return
+
+        reply_text = (
+            f"✅ **Kết quả Like thành công:**\n\n"
+            f"👤 Tên: {data.get('username', 'Không xác định')}\n"
+            f"🆔 UID: {data.get('uid', 'Không xác định')}\n"
+            f"🎚 Level: {data.get('level', 'Không xác định')}\n"
+            f"👍 Like trước: {data.get('likes_before', 'Không xác định')}\n"
+            f"✅ Like sau: {data.get('likes_after', 'Không xác định')}\n"
+            f"➕ Tổng cộng: {data.get('likes_given', 'Không xác định')} like"
+        )
+    else:
+        reply_text = "❌ Không thể xử lý yêu cầu."
+
+    await update.message.reply_text(reply_text, parse_mode="Markdown")
+
+
+# /viewff lệnh
+async def viewff(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❗ Vui lòng nhập đúng:\n/viewff <uid>")
+        return
+
+    uid = context.args[0]
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    await update.message.reply_text("🔍 Đang tìm thông tin người chơi...")
+
+    urlview = f"https://ff-garena.run.place/visitor/?uid={uid}"
 
     try:
-        response = requests.get(api_url)
+        response = requests.get(urlview, timeout=100)
         response.raise_for_status()
         data = response.json()
-    except requests.exceptions.RequestException as e:
-        bot.reply_to(message, f"Lỗi khi gọi API: {str(e)}")
-        return
-    except ValueError:
-        bot.reply_to(message, "API không trả về dữ liệu JSON hợp lệ.")
+    except Exception:
+        await update.message.reply_text("❌ Không thể truy cập API Garena.")
         return
 
-    status_text = "✅ Thành công" if data.get('status') else "❌ Thất bại"
+    if not isinstance(data, dict) or "data" not in data:
+        await update.message.reply_text("❌ Không tìm thấy thông tin người chơi.")
+        return
+
+    info = data["data"]
 
     reply_text = (
-        f"<b>🏖️ Khu Vực:</b> {data.get('khu_vuc', 'N/A')}\n"
-        f"<b>👤 Tên:</b> {data.get('name', 'N/A')}\n"
-        f"<b>🆔 User ID:</b> {data.get('user_id', 'N/A')}\n"
-        f"<b>📅 Ngày tạo:</b> {data.get('create_time', 'N/A')}\n"
-        f"<b>📌 Username:</b> @{data.get('username', 'N/A')}\n"
-        f"<b>👥 Followers (Trước):</b> {data.get('followers_before', 0)}\n"
-        f"<b>👥 Followers (Sau):</b> {data.get('followers_after', 0)}\n"
-        f"<b>✨ Đã thêm:</b> {data.get('followers_add', 0)}\n"
-        f"<b>💬 Thông báo:</b> {data.get('message', '')}\n"
-        f"<b>🔍 Trạng thái:</b> {status_text}"
+        f"🎮 **THÔNG TIN NGƯỜI CHƠI FF**\n\n"
+        f"👤 Tên: {info.get('nickname', 'Không xác định')}\n"
+        f"🆔 UID: {info.get('uid', uid)}\n"
+        f"⚔️ Huy hiệu: {info.get('badge', 'Không có')}\n"
+        f"🎯 Rank: {info.get('rank', {}).get('name', 'Không rõ')}\n"
+        f"🏅 Mùa: {info.get('season', 'Không rõ')}\n"
+        f"🔥 Tổng điểm: {info.get('points', 'Không có')}"
     )
 
-    avatar_url = data.get('avatar')
-    if avatar_url and avatar_url.startswith("http"):
-        bot.send_photo(message.chat.id, avatar_url)
+    await update.message.reply_text(reply_text, parse_mode="Markdown")
 
-    bot.send_message(message.chat.id, reply_text, parse_mode='HTML')
-
+# Main bot
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("likeff", likeff))
+    app.add_handler(CommandHandler("viewff", viewff))
+    print("Bot Telegram đang chạy...")
+    app.run_polling()
 
 if __name__ == "__main__":
-    print("Bot is running...")
-    bot.polling()
+    main()
