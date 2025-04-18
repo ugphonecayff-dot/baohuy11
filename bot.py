@@ -1,127 +1,89 @@
 import time
-import asyncio
 import requests
-from flask import Flask, request
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-from telegram.constants import ChatAction
+import telebot
+from telebot.types import Message
+from keep_alive import keep_alive  # Gọi keep_alive Flask
 
-BOT_TOKEN = "6367532329:AAFzGAqQZ_f4VQqX7VbwAoQ7iqbFO07Hzqk"
-WEBHOOK_URL = "https://your-domain.com/"  # <-- Thay bằng domain thật
+# Token bot Telegram (Bạn nên dùng biến môi trường trong thực tế)
+API_TOKEN = "6367532329:AAFzGAqQZ_f4VQqX7VbwAoQ7iqbFO07Hzqk"
+bot = telebot.TeleBot(API_TOKEN)
 
-# Khởi tạo Flask và Bot Telegram
-flask_app = Flask(__name__)
-telegram_app = Application.builder().token(BOT_TOKEN).build()
+# Gọi keep_alive để giữ bot sống (hữu ích nếu deploy trên Replit hoặc nền tảng tương tự)
+keep_alive()
 
-# /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Chào mừng bạn đến với bot Free Fire!\n"
-        "/likeff <idgame> - Tăng like\n"
-        "/viewff <uid> - Xem thông tin người chơi"
-    )
+user_last_like_time = {}
+LIKE_COOLDOWN = 60
 
-# /likeff
-async def likeff(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("❗ Nhập đúng cú pháp:\n/likeff <idgame>")
+@bot.message_handler(commands=['like'])
+def like_handler(message: Message):
+    user_id = message.from_user.id
+    current_time = time.time()
+
+    last_time = user_last_like_time.get(user_id, 0)
+    time_diff = current_time - last_time
+
+    if time_diff < LIKE_COOLDOWN:
+        wait_time = int(LIKE_COOLDOWN - time_diff)
+        bot.reply_to(message, f"<blockquote>⏳ Vui lòng chờ {wait_time} giây trước khi dùng lại lệnh này.</blockquote>", parse_mode="HTML")
         return
 
-    idgame = context.args[0]
-    await update.message.reply_text("⏳ Đang xử lý lượt like...")
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-    await asyncio.sleep(3)
+    user_last_like_time[user_id] = current_time
 
-    url = f"https://dichvukey.site/likeff2.php?key=vlong&uid={idgame}"
-    for attempt in range(5):
-        try:
-            res = requests.get(url, timeout=30)
-            res.raise_for_status()
-            data = res.json()
-            break
-        except Exception:
-            if attempt == 4:
-                await update.message.reply_text("❌ Server lỗi. Vui lòng thử lại.")
-                return
-            time.sleep(3)
-    else:
-        await update.message.reply_text("❌ Không thể kết nối.")
+    command_parts = message.text.split()
+    if len(command_parts) != 2:
+        bot.reply_to(message, "<blockquote>Vui lòng nhập đúng cú pháp: /like <UID></blockquote>", parse_mode="HTML")
         return
 
-    if data.get("status") == 2:
-        await update.message.reply_text("⚠️ Bạn đã đạt giới hạn lượt like hôm nay.")
-        return
+    idgame = command_parts[1]
+    urllike = f"https://dichvukey.site/likeff2.php?key=vlong&uid={idgame}"
 
-    reply = (
-        f"✅ **Like Thành Công:**\n\n"
-        f"👤 Tên: {data.get('username', 'Không xác định')}\n"
-        f"🆔 UID: {data.get('uid', idgame)}\n"
-        f"🎚 Level: {data.get('level', '?')}\n"
-        f"👍 Trước: {data.get('likes_before', '?')}\n"
-        f"✅ Sau: {data.get('likes_after', '?')}\n"
-        f"➕ Đã thêm: {data.get('likes_given', '?')} like"
-    )
-    await update.message.reply_text(reply, parse_mode="Markdown")
+    def safe_get(data, key):
+        value = data.get(key)
+        return value if value not in [None, ""] else "Không xác định"
 
-# /viewff
-async def viewff(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("❗ Nhập đúng cú pháp:\n/viewff <uid>")
-        return
+    def extract_number(text):
+        if not text:
+            return "Không xác định"
+        for part in text.split():
+            if part.isdigit():
+                return part
+        return "Không xác định"
 
-    uid = context.args[0]
-    await update.message.reply_text("🔍 Đang tìm thông tin...")
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-    await asyncio.sleep(2)
+    loading_msg = bot.reply_to(message, "<blockquote>⏳ Đang tiến hành buff like...</blockquote>", parse_mode="HTML")
 
     try:
-        res = requests.get(f"https://visit-plum.vercel.app/send_visit?uid={uid}", timeout=15)
-        res.raise_for_status()
-        data = res.json()
-    except Exception:
-        await update.message.reply_text("❌ API Garena không phản hồi.")
+        response = requests.get(urllike, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.RequestException:
+        bot.edit_message_text("<blockquote>Server đang quá tải, vui lòng thử lại sau.</blockquote>",
+                              chat_id=loading_msg.chat.id, message_id=loading_msg.message_id, parse_mode="HTML")
+        return
+    except ValueError:
+        bot.edit_message_text("<blockquote>Phản hồi từ server không hợp lệ.</blockquote>",
+                              chat_id=loading_msg.chat.id, message_id=loading_msg.message_id, parse_mode="HTML")
         return
 
-    if "data" not in data:
-        await update.message.reply_text("❌ Không tìm thấy người chơi.")
-        return
+    status_code = data.get("status")
 
-    info = data["data"]
-    reply = (
-        f"🎮 **THÔNG TIN NGƯỜI CHƠI FF**\n\n"
-        f"👤 Tên: {info.get('nickname', 'Không rõ')}\n"
-        f"🆔 UID: {info.get('uid', uid)}\n"
-        f"⚔️ Huy hiệu: {info.get('badge', 'Không có')}\n"
-        f"🎯 Rank: {info.get('rank', {}).get('name', 'Không rõ')}\n"
-        f"🏅 Mùa: {info.get('season', 'Không rõ')}\n"
-        f"🔥 Tổng điểm: {info.get('points', 'Không rõ')}"
+    reply_text = (
+        "<blockquote>"
+        "BUFF LIKE THÀNH CÔNG✅\n"
+        f"╭👤 Name: {safe_get(data, 'PlayerNickname')}\n"
+        f"├🆔 UID : {safe_get(data, 'uid')}\n"
+        f"├🌏 Region : vn\n"
+        f"├📉 Like trước đó: {safe_get(data, 'likes_before')}\n"
+        f"├📈 Like sau khi gửi: {safe_get(data, 'likes_after')}\n"
+        f"╰👍 Like được gửi: {extract_number(data.get('likes_given'))}"
     )
-    await update.message.reply_text(reply, parse_mode="Markdown")
 
-# Đăng ký các lệnh
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(CommandHandler("likeff", likeff))
-telegram_app.add_handler(CommandHandler("viewff", viewff))
+    if status_code == 2:
+        reply_text += "\n⚠️ Giới hạn like hôm nay, mai hãy thử lại sau."
 
-# Flask Webhook
-@flask_app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-    telegram_app.update_queue.put(update)
-    return "ok"
+    reply_text += "</blockquote>"
 
-@flask_app.route("/", methods=["GET"])
-def index():
-    return "Bot Free Fire đang hoạt động!"
+    bot.edit_message_text(reply_text, chat_id=loading_msg.chat.id, message_id=loading_msg.message_id, parse_mode="HTML")
 
-# Webhook setup
-async def set_webhook():
-    url = f"{WEBHOOK_URL}{BOT_TOKEN}"
-    await telegram_app.bot.set_webhook(url)
-
-if __name__ == "__main__":
-    import threading
-
-    threading.Thread(target=lambda: telegram_app.run_polling(), daemon=True).start()
-    asyncio.run(set_webhook())
-    flask_app.run(host="0.0.0.0", port=5000)
+if __name__ == '__main__':
+    print("Bot đang chạy...")
+    bot.infinity_polling()
