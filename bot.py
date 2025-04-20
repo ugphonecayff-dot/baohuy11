@@ -17,7 +17,10 @@ def send_welcome(message):
         "Xin chào!\n"
         "Sử dụng các lệnh sau để kiểm tra tài khoản TikTok:\n"
         "`/fl <username>` - Kiểm tra loại 1\n"
-        "`/fl2 <username>` - Kiểm tra loại 2",
+        "`/fl2 <username>` - Kiểm tra loại 2\n\n"
+        "Hãy nhập lệnh với tên tài khoản TikTok bạn muốn kiểm tra."
+        " Ví dụ: `/fl ngocanvip` hoặc `/fl2 ngocanvip` để kiểm tra tài khoản."
+        " Nếu gặp lỗi, vui lòng thử lại sau.",
         parse_mode="Markdown"
     )
 
@@ -27,6 +30,7 @@ def get_fl_info(message):
     try:
         username = message.text.split()[1]
     except IndexError:
+        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/fl ngocanvip`")
         return  # Không trả lời nếu thiếu username
 
     bot.send_chat_action(message.chat.id, "typing")
@@ -37,13 +41,21 @@ def get_fl_info(message):
 
     try:
         response = requests.get(api_url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-    except:
-        return  # Không trả lời nếu lỗi
+        response.raise_for_status()  # Kiểm tra lỗi HTTP
+        data = response.json()  # Chuyển đổi dữ liệu sang JSON
+        print("Dữ liệu nhận được:", data)  # In dữ liệu ra để kiểm tra
+    except requests.exceptions.RequestException as e:
+        print(f"Lỗi khi gọi API: {e}")
+        bot.reply_to(message, "❌ Lỗi khi kết nối với API. Vui lòng thử lại sau.")
+        return
+    except ValueError as e:
+        print(f"Lỗi trong quá trình xử lý dữ liệu JSON: {e}")
+        bot.reply_to(message, "❌ Dữ liệu trả về không hợp lệ.")
+        return
 
-    if not data or not data.get("status"):
-        return  # Không trả lời nếu không có dữ liệu hợp lệ
+    if not data or str(data.get("status")).lower() not in ["true", "1", "success"]:
+        bot.reply_to(message, "❌ Không tìm thấy dữ liệu tài khoản.")
+        return
 
     reply_text = (
         f"✅ *Thông tin tài khoản (API 1):*\n\n"
@@ -62,6 +74,7 @@ def get_fl2_info(message):
     try:
         username = message.text.split()[1]
     except IndexError:
+        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/fl2 ngocanvip`")
         return  # Không trả lời nếu thiếu username
 
     bot.send_chat_action(message.chat.id, "typing")
@@ -72,13 +85,21 @@ def get_fl2_info(message):
 
     try:
         response = requests.get(api_url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-    except:
-        return  # Không trả lời nếu lỗi
+        response.raise_for_status()  # Kiểm tra lỗi HTTP
+        data = response.json()  # Chuyển đổi dữ liệu sang JSON
+        print("Dữ liệu nhận được:", data)  # In dữ liệu ra để kiểm tra
+    except requests.exceptions.RequestException as e:
+        print(f"Lỗi khi gọi API: {e}")
+        bot.reply_to(message, "❌ Lỗi khi kết nối với API. Vui lòng thử lại sau.")
+        return
+    except ValueError as e:
+        print(f"Lỗi trong quá trình xử lý dữ liệu JSON: {e}")
+        bot.reply_to(message, "❌ Dữ liệu trả về không hợp lệ.")
+        return
 
-    if not data or not data.get("status"):
-        return  # Không trả lời nếu không có dữ liệu hợp lệ
+    if not data or str(data.get("status")).lower() not in ["true", "1", "success"]:
+        bot.reply_to(message, "❌ Không tìm thấy dữ liệu tài khoản.")
+        return
 
     reply_text = (
         f"✅ *Thông tin tài khoản (API 2):*\n\n"
@@ -90,9 +111,6 @@ def get_fl2_info(message):
     )
 
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
-
-# KHÔNG phản hồi với các tin nhắn khác — bỏ handler mặc định
-# Không cần handler func=lambda m: True
 
 # Chạy bot
 if __name__ == "__main__":
