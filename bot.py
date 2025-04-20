@@ -1,9 +1,11 @@
+# bot.py
+
 from keep_alive import keep_alive
 import telebot
 import requests
 import time
 
-# Khởi động keep_alive để giữ bot hoạt động
+# Khởi động web server để giữ bot hoạt động trên Render
 keep_alive()
 
 # Token bot Telegram
@@ -36,13 +38,11 @@ def get_account_info(message):
 
     api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
 
-    # Gắn delay trước khi gửi yêu cầu API
-    time.sleep(2)  # Delay 2 giây trước khi gọi API
+    time.sleep(2)  # Delay trước khi gọi API
 
     try:
-        # Thêm tham số timeout vào yêu cầu GET
-        response = requests.get(api_url, timeout=30)  # Timeout sau 30 giây
-        response.raise_for_status()  # Kiểm tra nếu mã trạng thái HTTP là lỗi
+        response = requests.get(api_url, timeout=30)
+        response.raise_for_status()
         data = response.json()
     except requests.exceptions.Timeout:
         bot.reply_to(message, "⏳ Lỗi: Yêu cầu đã hết thời gian chờ.")
@@ -57,22 +57,22 @@ def get_account_info(message):
 
     status_icon = "✅" if data.get("status") else "❌"
 
-    # Soạn nội dung trả về (chỉ giữ lại thông báo và trạng thái)
+    # Chỉ trả về thông báo và trạng thái
     reply_text = (
         f"{status_icon} *Thông tin tài khoản:*\n\n"
-        f"💬 *Thông báo:* {data.get('message', '')}\n"
+        f"💬 *Thông báo:* {data.get('message', 'Không có')}\n"
         f"🔍 *Trạng thái:* {status_icon}"
     )
 
     time.sleep(1)
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
-# Nếu gõ sai lệnh
+# Nếu người dùng gõ sai lệnh
 @bot.message_handler(func=lambda m: True)
 def handle_unknown(message):
     bot.reply_to(message, "❓ Không rõ lệnh. Dùng `/fl <username>` để tra cứu.", parse_mode="Markdown")
 
 # Khởi động bot
 if __name__ == "__main__":
-    print("Bot đang chạy...")
-    bot.polling()
+    print("Bot đang chạy trên Render...")
+    bot.infinity_polling()
