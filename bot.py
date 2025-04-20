@@ -49,7 +49,7 @@ def buff_handler(message):
     api_url = "https://dichvukey.site/fl.php?username=chipjuoi_209&key=ngocanvip"
 
     try:
-        response = requests.get(api_url, timeout=10)
+        response = requests.get(api_url, timeout=30)
         response.raise_for_status()
         bot.reply_to(message, f"✅ Kết quả từ API:\n\n{response.text}")
     except Exception as e:
