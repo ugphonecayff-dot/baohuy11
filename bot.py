@@ -27,8 +27,7 @@ def get_fl_info(message):
     try:
         username = message.text.split()[1]
     except IndexError:
-        bot.reply_to(message, "⚠️ Vui lòng nhập username. Ví dụ: /fl baohuydz158")
-        return
+        return  # Không trả lời nếu thiếu username
 
     bot.send_chat_action(message.chat.id, "typing")
     time.sleep(1)
@@ -40,20 +39,11 @@ def get_fl_info(message):
         response = requests.get(api_url, timeout=30)
         response.raise_for_status()
         data = response.json()
-    except requests.exceptions.Timeout:
-        bot.reply_to(message, "⏳ Lỗi: Hết thời gian chờ phản hồi từ API.")
-        return
-    except Exception as e:
-        bot.reply_to(message, f"❌ Lỗi khi gọi API: {e}")
-        return
+    except:
+        return  # Không trả lời nếu lỗi
 
-    if not data:
-        bot.reply_to(message, "❌ Không nhận được dữ liệu từ API.")
-        return
-
-    if not data.get("status"):
-        bot.reply_to(message, f"❌ {data.get('message', 'Không tìm thấy tài khoản.')}")
-        return
+    if not data or not data.get("status"):
+        return  # Không trả lời nếu không có dữ liệu hợp lệ
 
     reply_text = (
         f"✅ *Thông tin tài khoản (API 1):*\n\n"
@@ -64,7 +54,6 @@ def get_fl_info(message):
         f"🔍 *Trạng thái:* ✅"
     )
 
-    time.sleep(1)
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
 # Lệnh /fl2 sử dụng API 2
@@ -73,8 +62,7 @@ def get_fl2_info(message):
     try:
         username = message.text.split()[1]
     except IndexError:
-        bot.reply_to(message, "⚠️ Vui lòng nhập username. Ví dụ: /fl2 baohuydz158")
-        return
+        return  # Không trả lời nếu thiếu username
 
     bot.send_chat_action(message.chat.id, "typing")
     time.sleep(1)
@@ -86,20 +74,11 @@ def get_fl2_info(message):
         response = requests.get(api_url, timeout=30)
         response.raise_for_status()
         data = response.json()
-    except requests.exceptions.Timeout:
-        bot.reply_to(message, "⏳ Lỗi: Hết thời gian chờ phản hồi từ API.")
-        return
-    except Exception as e:
-        bot.reply_to(message, f"❌ Lỗi khi gọi API: {e}")
-        return
+    except:
+        return  # Không trả lời nếu lỗi
 
-    if not data:
-        bot.reply_to(message, "❌ Không nhận được dữ liệu từ API.")
-        return
-
-    if not data.get("status"):
-        bot.reply_to(message, f"❌ {data.get('message', 'Không tìm thấy tài khoản.')}")
-        return
+    if not data or not data.get("status"):
+        return  # Không trả lời nếu không có dữ liệu hợp lệ
 
     reply_text = (
         f"✅ *Thông tin tài khoản (API 2):*\n\n"
@@ -110,13 +89,10 @@ def get_fl2_info(message):
         f"🔍 *Trạng thái:* ✅"
     )
 
-    time.sleep(1)
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
-# Xử lý lệnh không hợp lệ
-@bot.message_handler(func=lambda m: True)
-def handle_unknown(message):
-    bot.reply_to(message, "❓ Không rõ lệnh. Dùng `/fl <username>` hoặc `/fl2 <username>` để tra cứu.", parse_mode="Markdown")
+# KHÔNG phản hồi với các tin nhắn khác — bỏ handler mặc định
+# Không cần handler func=lambda m: True
 
 # Chạy bot
 if __name__ == "__main__":
