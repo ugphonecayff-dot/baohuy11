@@ -57,18 +57,9 @@ def get_account_info(message):
 
     status_icon = "✅" if data.get("status") else "❌"
 
-    # Soạn nội dung trả về
+    # Soạn nội dung trả về (chỉ giữ lại thông báo và trạng thái)
     reply_text = (
         f"{status_icon} *Thông tin tài khoản:*\n\n"
-        f"🏖️ *Khu Vực:* {data.get('khu_vuc', 'N/A')}\n"
-        f"👤 *Tên:* {data.get('name', 'N/A')}\n"
-        f"🆔 *User ID:* `{data.get('user_id', 'N/A')}`\n"
-        f"📸 *Avatar:* [Xem ảnh]({data.get('avatar', '')})\n"
-        f"📅 *Ngày tạo:* {data.get('create_time', 'N/A')}\n"
-        f"📌 *Username:* @{data.get('username', 'N/A')}\n\n"
-        f"👥 *Followers Trước:* {data.get('followers_before', 0)}\n"
-        f"👥 *Followers Sau:* {data.get('followers_after', 0)}\n"
-        f"✨ *Đã thêm:* {data.get('followers_add', 0)}\n\n"
         f"💬 *Thông báo:* {data.get('message', '')}\n"
         f"🔍 *Trạng thái:* {status_icon}"
     )
