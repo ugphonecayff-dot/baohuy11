@@ -3,8 +3,8 @@ import requests
 import time
 from keep_alive import keep_alive  # Import file keep_alive.py
 
-# Token bot Telegram
-TOKEN = "6367532329:AAFzGAqQZ_f4VQqX7VbwAoQ7iqbFO07Hzqk"
+# Token bot Telegram (thay mới token)
+TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
 bot = telebot.TeleBot(TOKEN)
 
 # Lệnh /start để hướng dẫn sử dụng
@@ -25,7 +25,7 @@ def fl_handler(message):
     try:
         username = message.text.split()[1]
     except IndexError:
-        bot.reply_to(message, "⚠️ Vui lòng nhập username. Ví dụ: /fl chipjuoi_209")
+        bot.reply_to(message, "⚠️ Vui lòng nhập username. Ví dụ: /fl baohuydz158")
         return
 
     bot.send_chat_action(message.chat.id, "typing")
@@ -34,7 +34,7 @@ def fl_handler(message):
     api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
 
     try:
-        response = requests.get(api_url, timeout=30)
+        response = requests.get(api_url, timeout=10)
         response.raise_for_status()
         bot.reply_to(message, f"✅ Kết quả từ API cho @{username}:\n\n{response.text}")
     except Exception as e:
