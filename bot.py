@@ -1,88 +1,69 @@
-import time
-import requests
 import telebot
-from telebot.types import Message
-from keep_alive import keep_alive
+import requests
+import time
+from keep_alive import keep_alive  # Import file keep_alive.py
 
-# TOKEN của bot Telegram
-API_TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
-bot = telebot.TeleBot(API_TOKEN)
+# Token bot Telegram
+TOKEN = "6367532329:AAFzGAqQZ_f4VQqX7VbwAoQ7iqbFO07Hzqk"
+bot = telebot.TeleBot(TOKEN)
 
-keep_alive()  # Giữ bot hoạt động
-
-user_last_like_time = {}
-LIKE_COOLDOWN = 60
-
-@bot.message_handler(commands=['like'])
-def like_handler(message: Message):
-    user_id = message.from_user.id
-    current_time = time.time()
-
-    last_time = user_last_like_time.get(user_id, 0)
-    time_diff = current_time - last_time
-
-    if time_diff < LIKE_COOLDOWN:
-        wait_time = int(LIKE_COOLDOWN - time_diff)
-        bot.reply_to(message, f"<blockquote>⏳ Vui lòng chờ {wait_time} giây trước khi dùng lại lệnh này.</blockquote>", parse_mode="HTML")
-        return
-
-    user_last_like_time[user_id] = current_time
-
-    command_parts = message.text.split()
-    if len(command_parts) != 2:
-        bot.reply_to(message, "<blockquote>Vui lòng nhập đúng cú pháp: /like <UID></blockquote>", parse_mode="HTML")
-        return
-
-    idgame = command_parts[1]
-    urllike = f"https://dichvukey.site/likeff2.php?key=vlong&uid={idgame}"
-
-    def safe_get(data, key):
-        value = data.get(key)
-        return value if value not in [None, ""] else "Không xác định"
-
-    def extract_number(text):
-        if not text:
-            return "Không xác định"
-        for part in text.split():
-            if part.isdigit():
-                return part
-        return "Không xác định"
-
-    loading_msg = bot.reply_to(message, "<blockquote>⏳ Đang tiến hành buff like...</blockquote>", parse_mode="HTML")
-
-    try:
-        response = requests.get(urllike, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-    except requests.exceptions.RequestException:
-        bot.edit_message_text("<blockquote>Server đang quá tải, vui lòng thử lại sau.</blockquote>",
-                              chat_id=loading_msg.chat.id, message_id=loading_msg.message_id, parse_mode="HTML")
-        return
-    except ValueError:
-        bot.edit_message_text("<blockquote>Phản hồi từ server không hợp lệ.</blockquote>",
-                              chat_id=loading_msg.chat.id, message_id=loading_msg.message_id, parse_mode="HTML")
-        return
-
-    status_code = data.get("status")
-
-    reply_text = (
-        "<blockquote>"
-        "BUFF LIKE THÀNH CÔNG✅\n"
-        f"╭👤 Name: {safe_get(data, 'PlayerNickname')}\n"
-        f"├🆔 UID : {safe_get(data, 'uid')}\n"
-        f"├🌏 Region : vn\n"
-        f"├📉 Like trước đó: {safe_get(data, 'likes_before')}\n"
-        f"├📈 Like sau khi gửi: {safe_get(data, 'likes_after')}\n"
-        f"╰👍 Like được gửi: {extract_number(data.get('likes_given'))}"
+# Lệnh /start để hướng dẫn sử dụng
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(message,
+        "Xin chào!\n"
+        "Sử dụng lệnh sau để kiểm tra tài khoản TikTok:\n"
+        "`/fl <username>`\n"
+        "Ví dụ: `/fl baohuydz158`\n\n"
+        "Hoặc dùng `/buff` để thực hiện tác vụ từ API cố định.",
+        parse_mode="Markdown"
     )
 
-    if status_code == 2:
-        reply_text += "\n⚠️ Giới hạn like hôm nay, mai hãy thử lại sau."
+# Lệnh /fl <username> để gọi API và hiển thị kết quả
+@bot.message_handler(commands=['fl'])
+def fl_handler(message):
+    try:
+        username = message.text.split()[1]
+    except IndexError:
+        bot.reply_to(message, "⚠️ Vui lòng nhập username. Ví dụ: /fl chipjuoi_209")
+        return
 
-    reply_text += "</blockquote>"
+    bot.send_chat_action(message.chat.id, "typing")
+    time.sleep(1)
 
-    bot.edit_message_text(reply_text, chat_id=loading_msg.chat.id, message_id=loading_msg.message_id, parse_mode="HTML")
+    api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
 
-if __name__ == '__main__':
+    try:
+        response = requests.get(api_url, timeout=30)
+        response.raise_for_status()
+        bot.reply_to(message, f"✅ Kết quả từ API cho @{username}:\n\n{response.text}")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Lỗi khi gọi API: {e}")
+
+# Lệnh /buff gọi API với username mặc định
+@bot.message_handler(commands=['buff'])
+def buff_handler(message):
+    bot.send_chat_action(message.chat.id, "typing")
+    time.sleep(1)
+
+    api_url = "https://dichvukey.site/fl.php?username=chipjuoi_209&key=ngocanvip"
+
+    try:
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        bot.reply_to(message, f"✅ Kết quả từ API:\n\n{response.text}")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Lỗi khi gọi API: {e}")
+
+# Bắt mọi tin nhắn không hợp lệ
+@bot.message_handler(func=lambda m: True)
+def handle_unknown(message):
+    bot.reply_to(message, "❓ Không rõ lệnh. Dùng `/fl <username>` hoặc `/buff`.", parse_mode="Markdown")
+
+# Khởi động web server để giữ bot sống
+keep_alive()
+
+# Khởi động bot Telegram
+if __name__ == "__main__":
     print("Bot đang chạy...")
-    bot.infinity_polling()
+    bot.polling()
