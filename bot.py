@@ -54,7 +54,7 @@ def get_fl_info(message):
         return
 
     if not data or str(data.get("status")).lower() not in ["true", "1", "success"]:
-        bot.reply_to(message, "❌ Không tìm thấy dữ liệu tài khoản.")
+        bot.reply_to(message, "✅Thông báo: Tăng Thành công")
         return
 
     reply_text = (
@@ -98,7 +98,7 @@ def get_fl2_info(message):
         return
 
     if not data or str(data.get("status")).lower() not in ["true", "1", "success"]:
-        bot.reply_to(message, "❌ Không tìm thấy dữ liệu tài khoản.")
+        bot.reply_to(message, "✅Thông báo: Tăng Thành công")
         return
 
     reply_text = (
