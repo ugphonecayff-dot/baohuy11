@@ -36,7 +36,7 @@ def get_account_info(message):
     time.sleep(1.2)
     bot.reply_to(message, f"🔍 Đang tìm thông tin tài khoản `@{username}`...", parse_mode="Markdown")
 
-    api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
+    api_url = f"https://dichvukey.site/flt.php?username={username}&key=ngocanvip"
 
     time.sleep(2)  # Delay trước khi gọi API
 
