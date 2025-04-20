@@ -1,11 +1,10 @@
-# bot.py
-
 from keep_alive import keep_alive
 import telebot
 import requests
 import time
+import os
 
-# Khởi động web server để giữ bot hoạt động trên Render
+# Khởi động web server giữ bot hoạt động trên Render
 keep_alive()
 
 # Token bot Telegram
@@ -23,7 +22,7 @@ def send_welcome(message):
         parse_mode="Markdown"
     )
 
-# /fl <username> để tra thông tin
+# /fl <username> để tra thông tin TikTok
 @bot.message_handler(commands=['fl'])
 def get_account_info(message):
     try:
@@ -36,43 +35,64 @@ def get_account_info(message):
     time.sleep(1.2)
     bot.reply_to(message, f"🔍 Đang tìm thông tin tài khoản `@{username}`...", parse_mode="Markdown")
 
-    api_url = f"https://dichvukey.site/flt.php?username={username}&key=ngocanvip"
+    api_main = f"https://dichvukey.site/flt.php?username={username}&key=ngocanvip"
+    api_alt = f"https://guanghai.x10.mx/infott.php?username={username}"
 
-    time.sleep(2)  # Delay trước khi gọi API
-
+    # Gọi API chính
     try:
-        response = requests.get(api_url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        response_main = requests.get(api_main, timeout=30)
+        response_main.raise_for_status()
+        data_main = response_main.json()
     except requests.exceptions.Timeout:
-        bot.reply_to(message, "⏳ Lỗi: Yêu cầu đã hết thời gian chờ.")
+        bot.reply_to(message, "⏳ Lỗi: Hết thời gian chờ phản hồi từ API chính.")
         return
-    except requests.exceptions.RequestException as e:
-        bot.reply_to(message, f"❌ Lỗi khi gọi API: {e}")
-        return
-
-    if not data:
-        bot.reply_to(message, "❌ Không nhận được dữ liệu từ API.")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Lỗi API chính: {e}")
         return
 
-    status_icon = "✅" if data.get("status") else "❌"
+    # Gọi API phụ (không bắt buộc)
+    try:
+        response_alt = requests.get(api_alt, timeout=10)
+        data_alt = response_alt.json()
+    except:
+        data_alt = {}
 
-    # Chỉ trả về thông báo và trạng thái
+    if not data_main:
+        bot.reply_to(message, "❌ Không nhận được dữ liệu từ API chính.")
+        return
+
+    status_icon = "✅" if data_main.get("status") else "❌"
+
+    # Chuẩn bị nội dung phản hồi
     reply_text = (
         f"{status_icon} *Thông tin tài khoản:*\n\n"
-        f"💬 *Thông báo:* {data.get('message', 'Không có')}\n"
+        f"💬 *Thông báo:* {data_main.get('message', 'Không có')}\n"
+        f"👥 *Followers Trước:* {data_main.get('followers_before', 0)}\n"
+        f"👥 *Followers Sau:* {data_main.get('followers_after', 0)}\n"
+        f"✨ *Đã thêm:* {data_main.get('followers_add', 0)}\n\n"
         f"🔍 *Trạng thái:* {status_icon}"
     )
+
+    # Thêm dữ liệu từ API phụ nếu có
+    if data_alt:
+        followers = data_alt.get("follower")
+        likes = data_alt.get("like")
+        if followers or likes:
+            reply_text += "\n\n📊 *Dữ liệu phụ:*"
+            if followers:
+                reply_text += f"\n👥 *Followers:* {followers}"
+            if likes:
+                reply_text += f"\n❤️ *Likes:* {likes}"
 
     time.sleep(1)
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
-# Nếu người dùng gõ sai lệnh
+# Xử lý lệnh không hợp lệ
 @bot.message_handler(func=lambda m: True)
 def handle_unknown(message):
     bot.reply_to(message, "❓ Không rõ lệnh. Dùng `/fl <username>` để tra cứu.", parse_mode="Markdown")
 
-# Khởi động bot
+# Chạy bot
 if __name__ == "__main__":
     print("Bot đang chạy trên Render...")
     bot.infinity_polling()
