@@ -10,30 +10,33 @@ keep_alive()
 TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
 bot = telebot.TeleBot(TOKEN)
 
-# /start hướng dẫn sử dụng bot
+# Lệnh /start hướng dẫn người dùng
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     bot.reply_to(message,
         "Xin chào!\n"
         "Sử dụng các lệnh sau để kiểm tra tài khoản TikTok:\n\n"
-        "`/fl <username>` - Kiểm tra bằng API chính\n"
-        "`/fl3 <username>` - Kiểm tra loại 3 (API mới)\n\n"
-        "Ví dụ: `/fl emifukameo._`",
+        "`/buff <username>` - Kiểm tra bằng API 2\n"
+        "`/fl3 <username>` - Kiểm tra bằng API 3 (Soundcast)\n\n"
+        "Ví dụ: `/buff ngocanvip` hoặc `/fl3 ngocanvip`\n"
+        "Nếu gặp lỗi, vui lòng thử lại sau.",
         parse_mode="Markdown"
     )
 
-# /fl -> API chính tại https://dichvukey.site/fl.php
-@bot.message_handler(commands=['fl'])
-def handle_fl(message):
+# ============================
+# Lệnh /buff (API 2 cũ)
+# ============================
+@bot.message_handler(commands=['buff'])
+def handle_buff(message):
     try:
         username = message.text.split()[1]
     except IndexError:
-        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/fl emifukameo._`", parse_mode="Markdown")
+        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/buff ngocanvip`", parse_mode="Markdown")
         return
 
     bot.send_chat_action(message.chat.id, "typing")
     time.sleep(1)
-    bot.reply_to(message, f"🔍 Đang kiểm tra `@{username}` bằng API chính...", parse_mode="Markdown")
+    bot.reply_to(message, f"🔍 Đang kiểm tra `@{username}` bằng API 2...", parse_mode="Markdown")
 
     api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
 
@@ -41,22 +44,23 @@ def handle_fl(message):
         response = requests.get(api_url, timeout=40)
         response.raise_for_status()
         data = response.json()
-        print("Dữ liệu API FL:", data)
+        print("Dữ liệu nhận được từ API 2:", data)
     except requests.exceptions.RequestException as e:
-        print(f"Lỗi khi gọi API FL: {e}")
+        print(f"Lỗi khi gọi API 2: {e}")
         bot.reply_to(message, "❌ Lỗi khi kết nối với API. Vui lòng thử lại sau.")
         return
-    except ValueError as e:
-        print(f"Lỗi JSON từ API FL: {e}")
-        bot.reply_to(message, "❌ Dữ liệu trả về không hợp lệ.")
+    except ValueError:
+        print("API 2 không trả JSON:", response.text)
+        bot.reply_to(message, f"✅Thông báo: {response.text.strip()}")
         return
 
-    if not data or str(data.get("status")).lower() not in ["true", "1", "success"]:
-        bot.reply_to(message, f"❌ Không thể kiểm tra tài khoản @{username}. Vui lòng thử lại sau.")
+    status = str(data.get("status", "")).lower()
+    if status not in ["true", "1", "success"]:
+        bot.reply_to(message, f"✅Thông báo: {data.get('message', 'Tăng Thành công')}")
         return
 
     reply_text = (
-        f"✅ *Thông tin tài khoản (API Chính):*\n\n"
+        f"✅ *Thông tin tài khoản (API 2):*\n\n"
         f"💬 *Thông báo:* {data.get('message', 'Không có')}\n"
         f"👥 *Followers Trước:* {data.get('followers_before', 0)}\n"
         f"👥 *Followers Sau:* {data.get('followers_after', 0)}\n"
@@ -66,13 +70,15 @@ def handle_fl(message):
 
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
-# /fl3 -> API 3
+# ============================
+# Lệnh /fl3 - API Soundcast
+# ============================
 @bot.message_handler(commands=['fl3'])
-def get_fl3_info(message):
+def handle_fl3(message):
     try:
         username = message.text.split()[1]
     except IndexError:
-        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/fl3 emifukameo._`", parse_mode="Markdown")
+        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/fl3 ngocanvip`", parse_mode="Markdown")
         return
 
     bot.send_chat_action(message.chat.id, "typing")
@@ -91,14 +97,14 @@ def get_fl3_info(message):
         print(f"Lỗi khi gọi API 3: {e}")
         bot.reply_to(message, "❌ Lỗi khi kết nối với API 3. Vui lòng thử lại sau.")
         return
-    except ValueError as e:
-        print(f"Lỗi JSON từ API 3: {e}")
-        bot.reply_to(message, "❌ Dữ liệu trả về không hợp lệ.")
+    except ValueError:
+        print("API 3 không trả JSON:", response.text)
+        bot.reply_to(message, f"✅Thông báo: {response.text.strip()}")
         return
 
     reply_text = (
         f"✅ *Thông tin tài khoản (API 3):*\n\n"
-        f"💬 *Thông báo:* {data.get('message', 'Không có thông báo')}\n"
+        f"💬 *Thông báo:* {data.get('message', 'Không có')}\n"
         f"👥 *Followers Trước:* {data.get('followers_before', 'N/A')}\n"
         f"👥 *Followers Sau:* {data.get('followers_after', 'N/A')}\n"
         f"✨ *Đã thêm:* {data.get('followers_add', 'N/A')}\n\n"
@@ -107,7 +113,9 @@ def get_fl3_info(message):
 
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
+# ============================
 # Chạy bot
+# ============================
 if __name__ == "__main__":
     print("Bot đang chạy trên Render...")
     bot.infinity_polling()
