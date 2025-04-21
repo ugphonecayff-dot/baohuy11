@@ -40,7 +40,7 @@ def get_fl_info(message):
     api_url = f"https://dichvukey.site/flt.php?username={username}&key=ngocanvip"
 
     try:
-        response = requests.get(api_url, timeout=30)
+        response = requests.get(api_url, timeout=40)
         response.raise_for_status()  # Kiểm tra lỗi HTTP
         data = response.json()  # Chuyển đổi dữ liệu sang JSON
         print("Dữ liệu nhận được:", data)  # In dữ liệu ra để kiểm tra
@@ -84,7 +84,7 @@ def get_fl2_info(message):
     api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
 
     try:
-        response = requests.get(api_url, timeout=30)
+        response = requests.get(api_url, timeout=40)
         response.raise_for_status()  # Kiểm tra lỗi HTTP
         data = response.json()  # Chuyển đổi dữ liệu sang JSON
         print("Dữ liệu nhận được:", data)  # In dữ liệu ra để kiểm tra
