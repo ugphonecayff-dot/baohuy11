@@ -10,41 +10,53 @@ keep_alive()
 TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
 bot = telebot.TeleBot(TOKEN)
 
-# Hàm dùng chung để xử lý API 1 và 2
-def handle_fl_command(message, api_type):
+# /start hướng dẫn sử dụng bot
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(message,
+        "Xin chào!\n"
+        "Sử dụng các lệnh sau để kiểm tra tài khoản TikTok:\n\n"
+        "`/fl <username>` - Kiểm tra bằng API chính\n"
+        "`/fl3 <username>` - Kiểm tra loại 3 (API mới)\n\n"
+        "Ví dụ: `/fl emifukameo._`",
+        parse_mode="Markdown"
+    )
+
+# /fl -> API chính tại https://dichvukey.site/fl.php
+@bot.message_handler(commands=['fl'])
+def handle_fl(message):
     try:
         username = message.text.split()[1]
     except IndexError:
-        bot.reply_to(message, f"❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/{api_type} ngocanvip`", parse_mode="Markdown")
+        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/fl emifukameo._`", parse_mode="Markdown")
         return
 
     bot.send_chat_action(message.chat.id, "typing")
     time.sleep(1)
-    bot.reply_to(message, f"🔍 Đang kiểm tra `@{username}` bằng API {1 if api_type == 'fl' else 2}...", parse_mode="Markdown")
+    bot.reply_to(message, f"🔍 Đang kiểm tra `@{username}` bằng API chính...", parse_mode="Markdown")
 
-    endpoint = "flt.php" if api_type == "fl" else "fl.php"
-    api_url = f"https://dichvukey.site/{endpoint}?username={username}&key=ngocanvip"
+    api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
 
     try:
         response = requests.get(api_url, timeout=40)
         response.raise_for_status()
         data = response.json()
-        print(f"Dữ liệu API {api_type.upper()}:", data)
+        print("Dữ liệu API FL:", data)
     except requests.exceptions.RequestException as e:
-        print(f"Lỗi khi gọi API {api_type.upper()}: {e}")
+        print(f"Lỗi khi gọi API FL: {e}")
         bot.reply_to(message, "❌ Lỗi khi kết nối với API. Vui lòng thử lại sau.")
         return
     except ValueError as e:
-        print(f"Lỗi JSON API {api_type.upper()}: {e}")
+        print(f"Lỗi JSON từ API FL: {e}")
         bot.reply_to(message, "❌ Dữ liệu trả về không hợp lệ.")
         return
 
     if not data or str(data.get("status")).lower() not in ["true", "1", "success"]:
-        bot.reply_to(message, "✅Thông báo: Tăng Thành công")
+        bot.reply_to(message, f"❌ Không thể kiểm tra tài khoản @{username}. Vui lòng thử lại sau.")
         return
 
     reply_text = (
-        f"✅ *Thông tin tài khoản (API {1 if api_type == 'fl' else 2}):*\n\n"
+        f"✅ *Thông tin tài khoản (API Chính):*\n\n"
         f"💬 *Thông báo:* {data.get('message', 'Không có')}\n"
         f"👥 *Followers Trước:* {data.get('followers_before', 0)}\n"
         f"👥 *Followers Sau:* {data.get('followers_after', 0)}\n"
@@ -54,37 +66,13 @@ def handle_fl_command(message, api_type):
 
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
-# /start hướng dẫn sử dụng bot
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message,
-        "Xin chào!\n"
-        "Sử dụng các lệnh sau để kiểm tra tài khoản TikTok:\n\n"
-        "`/fl <username>` - Kiểm tra loại 1\n"
-        "`/fl2 <username>` - Kiểm tra loại 2\n"
-        "`/fl3 <username>` - Kiểm tra loại 3 (API mới)\n\n"
-        "Ví dụ: `/fl ngocanvip` hoặc `/fl3 ngocanvip`\n"
-        "Nếu gặp lỗi, vui lòng thử lại sau.",
-        parse_mode="Markdown"
-    )
-
-# /fl -> API 1
-@bot.message_handler(commands=['fl'])
-def handle_fl(message):
-    handle_fl_command(message, 'fl')
-
-# /fl2 -> API 2
-@bot.message_handler(commands=['fl2'])
-def handle_fl2(message):
-    handle_fl_command(message, 'fl2')
-
-# /fl3 -> API mới (API 3)
+# /fl3 -> API 3
 @bot.message_handler(commands=['fl3'])
 def get_fl3_info(message):
     try:
         username = message.text.split()[1]
     except IndexError:
-        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/fl3 ngocanvip`", parse_mode="Markdown")
+        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/fl3 emifukameo._`", parse_mode="Markdown")
         return
 
     bot.send_chat_action(message.chat.id, "typing")
