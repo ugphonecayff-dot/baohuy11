@@ -10,8 +10,21 @@ keep_alive()
 TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
 bot = telebot.TeleBot(TOKEN)
 
+# ID nhóm được phép sử dụng bot
+GROUP_ID = -1002221629819
+
+# Decorator hạn chế lệnh chỉ dùng trong nhóm
+def only_in_group(func):
+    def wrapper(message):
+        if message.chat.id != GROUP_ID:
+            bot.reply_to(message, "❌ Lệnh này chỉ sử dụng được trong nhóm @Baohuydevs được chỉ định.")
+            return
+        return func(message)
+    return wrapper
+
 # Lệnh /start hướng dẫn người dùng
 @bot.message_handler(commands=['start'])
+@only_in_group
 def send_welcome(message):
     bot.reply_to(message,
         "Xin chào!\n"
@@ -24,9 +37,10 @@ def send_welcome(message):
     )
 
 # ============================
-# Lệnh /buff (API 2 cũ)
+# Lệnh /buff (API 2)
 # ============================
 @bot.message_handler(commands=['buff'])
+@only_in_group
 def handle_buff(message):
     try:
         username = message.text.split()[1]
@@ -74,6 +88,7 @@ def handle_buff(message):
 # Lệnh /fl3 - API Soundcast
 # ============================
 @bot.message_handler(commands=['fl3'])
+@only_in_group
 def handle_fl3(message):
     try:
         username = message.text.split()[1]
