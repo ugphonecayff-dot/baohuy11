@@ -18,7 +18,7 @@ def send_welcome(message):
         "Sử dụng các lệnh sau để kiểm tra tài khoản TikTok:\n\n"
         "`/buff <username>` - Kiểm tra bằng API 2\n"
         "`/fl3 <username>` - Kiểm tra bằng API 3 (Soundcast)\n\n"
-        "Ví dụ: `/buff ngocanvip` hoặc `/fl3 ngocanvip`\n"
+        "Ví dụ: `/buff baohuydz158` hoặc `/fl3 baohuydz158`\n"
         "Nếu gặp lỗi, vui lòng thử lại sau.",
         parse_mode="Markdown"
     )
