@@ -1,4 +1,3 @@
-import os
 from keep_alive import keep_alive
 import telebot
 import requests
@@ -6,8 +5,8 @@ import time
 
 keep_alive()
 
-# Lấy token từ biến môi trường
-TOKEN = os.getenv("6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0")
+# Token bot Telegram
+TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
 bot = telebot.TeleBot(TOKEN)
 
 # ID nhóm cho phép dùng bot
