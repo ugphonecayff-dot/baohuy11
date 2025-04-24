@@ -2,6 +2,7 @@ from keep_alive import keep_alive
 import telebot
 import requests
 import time
+import threading
 
 keep_alive()
 
@@ -9,11 +10,13 @@ keep_alive()
 TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
 bot = telebot.TeleBot(TOKEN)
 
-# ID nhóm cho phép dùng bot
+# ID nhóm và ID admin
 GROUP_ID = -1002221629819
+ADMIN_ID = 5736655322  # Thay bằng Telegram user_id của bạn
 
 # Cooldown dictionary
 user_cooldowns = {}
+auto_buff_tasks = {}  # Lưu các thread auto buff
 
 # Hàm kiểm tra cooldown
 def is_on_cooldown(user_id, command):
@@ -26,13 +29,36 @@ def is_on_cooldown(user_id, command):
     return False
 
 # Decorator chỉ dùng trong nhóm
+from functools import wraps
 def only_in_group(func):
+    @wraps(func)
     def wrapper(message):
         if message.chat.id != GROUP_ID:
             bot.reply_to(message, "❌ Lệnh này chỉ sử dụng được trong nhóm @Baohuydevs được chỉ định.")
             return
         return func(message)
     return wrapper
+
+# Tự động gọi API mỗi 15 phút
+def auto_buff(username, chat_id, user_id):
+    if user_id not in auto_buff_tasks:
+        return  # Đã bị huỷ
+
+    api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
+    try:
+        response = requests.get(api_url, timeout=80)
+        data = response.json()
+        bot.send_message(chat_id, f"✅ Tự động buff cho `@{username}` thành công!\n"
+                                  f"➕ Thêm: {data.get('followers_add', 0)}\n"
+                                  f"💬 {data.get('message', 'Không có')}",
+                         parse_mode="Markdown")
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ Lỗi khi tự động buff: {e}")
+
+    if user_id in auto_buff_tasks:
+        task = threading.Timer(900, auto_buff, args=[username, chat_id, user_id])
+        auto_buff_tasks[user_id] = task
+        task.start()
 
 # Lệnh /start
 @bot.message_handler(commands=['start'])
@@ -42,9 +68,10 @@ def send_welcome(message):
         "Xin chào!\n"
         "Sử dụng các lệnh sau để kiểm tra tài khoản TikTok:\n\n"
         "`/buff <username>` - Kiểm tra bằng API 2\n"
-        "`/fl3 <username>` - Kiểm tra bằng API 3 (Soundcast)\n\n"
-        "Ví dụ: `/buff baohuydz158` hoặc `/fl3 baohuydz158`\n"
-        "Nếu gặp lỗi, vui lòng thử lại sau.",
+        "`/fl3 <username>` - Kiểm tra bằng API 3 (Soundcast)\n"
+        "`/treo <username>` - Tự động buff mỗi 15 phút (chỉ admin)\n"
+        "`/huytreo` - Huỷ treo\n\n"
+        "Ví dụ: `/buff baohuydz158`, `/treo baohuydz158`",
         parse_mode="Markdown"
     )
 
@@ -134,6 +161,46 @@ def handle_fl3(message):
         f"🔍 *Trạng thái:* {data.get('status', 'Không rõ')}"
     )
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
+
+# Lệnh /treo (chỉ admin)
+@bot.message_handler(commands=['treo'])
+@only_in_group
+def handle_treo(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "❌ Lệnh này chỉ admin được phép sử dụng.")
+        return
+
+    parts = message.text.strip().split()
+    if len(parts) < 2:
+        bot.reply_to(message, "❌ Vui lòng cung cấp username TikTok. Ví dụ: `/treo baohuydz158`", parse_mode="Markdown")
+        return
+
+    username = parts[1].lstrip("@")
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+
+    if user_id in auto_buff_tasks:
+        bot.reply_to(message, "⚠️ Đang treo rồi. Muốn treo khác thì dùng `/huytreo` trước.")
+        return
+
+    bot.reply_to(message, f"✅ Đã bắt đầu tự động buff `@{username}` mỗi 15 phút.", parse_mode="Markdown")
+    auto_buff_tasks[user_id] = None
+    auto_buff(username, chat_id, user_id)
+
+# Lệnh /huytreo (chỉ admin)
+@bot.message_handler(commands=['huytreo'])
+@only_in_group
+def handle_huytreo(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "❌ Lệnh này chỉ admin được phép sử dụng.")
+        return
+
+    user_id = message.from_user.id
+    task = auto_buff_tasks.pop(user_id, None)
+    if task:
+        task.cancel()
+
+    bot.reply_to(message, "✅ Đã dừng tự động buff.")
 
 # Chạy bot
 if __name__ == "__main__":
