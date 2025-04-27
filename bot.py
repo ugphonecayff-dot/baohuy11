@@ -11,7 +11,7 @@ TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
 bot = telebot.TeleBot(TOKEN)
 
 # ID nhóm và ID admin
-GROUP_ID = -1002221629819
+GROUP_IDS = [-1002221629819, -1002334731264]  # Hai ID nhóm
 ADMIN_ID = 5736655322  # Thay bằng Telegram user_id của bạn
 
 # Cooldown dictionary
@@ -33,7 +33,7 @@ from functools import wraps
 def only_in_group(func):
     @wraps(func)
     def wrapper(message):
-        if message.chat.id != GROUP_ID:
+        if message.chat.id not in GROUP_IDS:
             bot.reply_to(message, "❌ Lệnh này chỉ sử dụng được trong nhóm @Baohuydevs được chỉ định.")
             return
         return func(message)
