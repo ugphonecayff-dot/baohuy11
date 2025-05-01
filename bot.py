@@ -125,7 +125,7 @@ def handle_fl3(message):
     api_url = f"https://nvp310107.x10.mx/fltik.php?username={username}&key=30T42025VN"
 
     try:
-        response = requests.get(api_url, timeout=30, verify=False)
+        response = requests.get(api_url, timeout=100, verify=False)
         response.raise_for_status()
         data = response.json()
     except requests.exceptions.RequestException:
