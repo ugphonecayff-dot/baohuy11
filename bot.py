@@ -22,7 +22,6 @@ auto_buff_tasks = {}
 # Tắt cảnh báo SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Hàm kiểm tra cooldown
 def is_on_cooldown(user_id, command):
     now = time.time()
     key = f"{user_id}_{command}"
@@ -32,17 +31,6 @@ def is_on_cooldown(user_id, command):
     user_cooldowns[key] = now
     return False
 
-# Decorator chỉ dùng trong nhóm
-def only_in_group(func):
-    @wraps(func)
-    def wrapper(message):
-        if not message.chat.type.endswith("group"):
-            bot.reply_to(message, "❌ Lệnh này chỉ sử dụng được trong nhóm.")
-            return
-        return func(message)
-    return wrapper
-
-# Tự động gọi API mỗi 15 phút
 def auto_buff(username, chat_id, user_id):
     if user_id not in auto_buff_tasks:
         return
@@ -62,9 +50,7 @@ def auto_buff(username, chat_id, user_id):
         auto_buff_tasks[user_id] = task
         task.start()
 
-# /start
 @bot.message_handler(commands=['start'])
-@only_in_group
 def send_welcome(message):
     bot.reply_to(message,
         "Xin chào!\n"
@@ -77,9 +63,7 @@ def send_welcome(message):
         parse_mode="Markdown"
     )
 
-# /buff
 @bot.message_handler(commands=['buff'])
-@only_in_group
 def handle_buff(message):
     if is_on_cooldown(message.from_user.id, 'buff'):
         bot.reply_to(message, "⏳ Vui lòng đợi 30 giây trước khi dùng lại lệnh này.")
@@ -122,9 +106,7 @@ def handle_buff(message):
     )
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
-# /fl3 (Đã fix SSL lỗi)
 @bot.message_handler(commands=['fl3'])
-@only_in_group
 def handle_fl3(message):
     if is_on_cooldown(message.from_user.id, 'fl3'):
         bot.reply_to(message, "⏳ Vui lòng đợi 30 giây trước khi dùng lại lệnh này.")
@@ -143,7 +125,7 @@ def handle_fl3(message):
     api_url = f"https://nvp310107.x10.mx/fltik.php?username={username}&key=30T42025VN"
 
     try:
-        response = requests.get(api_url, timeout=50, verify=False)
+        response = requests.get(api_url, timeout=30, verify=False)
         response.raise_for_status()
         data = response.json()
     except requests.exceptions.RequestException:
@@ -163,9 +145,7 @@ def handle_fl3(message):
     )
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
-# /treo
 @bot.message_handler(commands=['treo'])
-@only_in_group
 def handle_treo(message):
     if message.from_user.id != ADMIN_ID:
         bot.reply_to(message, "❌ Lệnh này chỉ admin được phép sử dụng.")
@@ -188,9 +168,7 @@ def handle_treo(message):
     auto_buff_tasks[user_id] = None
     auto_buff(username, chat_id, user_id)
 
-# /huytreo
 @bot.message_handler(commands=['huytreo'])
-@only_in_group
 def handle_huytreo(message):
     if message.from_user.id != ADMIN_ID:
         bot.reply_to(message, "❌ Lệnh này chỉ admin được phép sử dụng.")
