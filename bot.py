@@ -4,6 +4,7 @@ import requests
 import time
 import threading
 from functools import wraps
+import urllib3
 
 keep_alive()
 
@@ -11,13 +12,15 @@ keep_alive()
 TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
 bot = telebot.TeleBot(TOKEN)
 
-# ID nhóm và ID admin
-GROUP_IDS = [-1002221629819, -1002334731264]  # Hai ID nhóm
-ADMIN_ID = 5736655322  # Thay bằng Telegram user_id của bạn
+# ID admin
+ADMIN_ID = 5736655322
 
 # Cooldown dictionary
 user_cooldowns = {}
-auto_buff_tasks = {}  # Lưu các thread auto buff
+auto_buff_tasks = {}
+
+# Tắt cảnh báo SSL
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Hàm kiểm tra cooldown
 def is_on_cooldown(user_id, command):
@@ -33,8 +36,8 @@ def is_on_cooldown(user_id, command):
 def only_in_group(func):
     @wraps(func)
     def wrapper(message):
-        if message.chat.id not in GROUP_IDS:
-            bot.reply_to(message, "❌ Lệnh này chỉ sử dụng được trong nhóm @Baohuydevs được chỉ định.")
+        if not message.chat.type.endswith("group"):
+            bot.reply_to(message, "❌ Lệnh này chỉ sử dụng được trong nhóm.")
             return
         return func(message)
     return wrapper
@@ -42,8 +45,7 @@ def only_in_group(func):
 # Tự động gọi API mỗi 15 phút
 def auto_buff(username, chat_id, user_id):
     if user_id not in auto_buff_tasks:
-        return  # Đã bị huỷ
-
+        return
     api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
     try:
         response = requests.get(api_url, timeout=80)
@@ -60,7 +62,7 @@ def auto_buff(username, chat_id, user_id):
         auto_buff_tasks[user_id] = task
         task.start()
 
-# Lệnh /start
+# /start
 @bot.message_handler(commands=['start'])
 @only_in_group
 def send_welcome(message):
@@ -75,7 +77,7 @@ def send_welcome(message):
         parse_mode="Markdown"
     )
 
-# Lệnh /buff
+# /buff
 @bot.message_handler(commands=['buff'])
 @only_in_group
 def handle_buff(message):
@@ -120,7 +122,7 @@ def handle_buff(message):
     )
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
-# Lệnh /fl3 (ĐÃ THAY API)
+# /fl3 (Đã fix SSL lỗi)
 @bot.message_handler(commands=['fl3'])
 @only_in_group
 def handle_fl3(message):
@@ -141,11 +143,11 @@ def handle_fl3(message):
     api_url = f"https://nvp310107.x10.mx/fltik.php?username={username}&key=30T42025VN"
 
     try:
-        response = requests.get(api_url, timeout=30)
+        response = requests.get(api_url, timeout=50, verify=False)
         response.raise_for_status()
         data = response.json()
     except requests.exceptions.RequestException:
-        bot.reply_to(message, "❌ Lỗi khi kết nối với API 3. Vui lòng thử lại sau.")
+        bot.reply_to(message, "❌ Không thể kết nối đến API 3. Vui lòng thử lại sau.")
         return
     except ValueError:
         bot.reply_to(message, f"✅Thông báo: {response.text.strip()}")
@@ -161,7 +163,7 @@ def handle_fl3(message):
     )
     bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
 
-# Lệnh /treo (chỉ admin)
+# /treo
 @bot.message_handler(commands=['treo'])
 @only_in_group
 def handle_treo(message):
@@ -186,7 +188,7 @@ def handle_treo(message):
     auto_buff_tasks[user_id] = None
     auto_buff(username, chat_id, user_id)
 
-# Lệnh /huytreo (chỉ admin)
+# /huytreo
 @bot.message_handler(commands=['huytreo'])
 @only_in_group
 def handle_huytreo(message):
@@ -203,5 +205,5 @@ def handle_huytreo(message):
 
 # Chạy bot
 if __name__ == "__main__":
-    print("Bot đang chạy trên Render...")
+    print("Bot đang chạy...")
     bot.infinity_polling()
