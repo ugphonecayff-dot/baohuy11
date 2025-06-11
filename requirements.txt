@@ -5,3 +5,4 @@ requests
 pyrogram
 tgcrypto
 requests
+dotenv
