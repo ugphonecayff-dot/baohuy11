@@ -1,187 +1,193 @@
-from keep_alive import keep_alive
-import telebot
+from pyrogram import Client, filters
+from pyrogram.types import Message
 import requests
 import time
-import threading
-from functools import wraps
-import urllib3
+import os
+import logging
+from keep_alive import keep_alive
+from dotenv import load_dotenv
 
+# Load biến môi trường
+load_dotenv()
+
+# Logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Token bot
+BOT_TOKEN = os.getenv("6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0")
+if not BOT_TOKEN:
+    raise ValueError("❌ Bạn chưa thiết lập biến môi trường BOT_TOKEN")
+
+# Khởi động web server để giữ bot sống (nếu cần)
 keep_alive()
 
-# Token bot Telegram
-TOKEN = "6367532329:AAEuSSv8JuGKzJQD6qI431udTvdq1l25zo0"
-bot = telebot.TeleBot(TOKEN)
+# Khởi tạo client
+app = Client("HoangDaiXuBot", bot_token=BOT_TOKEN)
 
-# ID admin
-ADMIN_ID = 5736655322
+# Thời gian khởi động bot
+start_time = time.time()
 
-# Cooldown dictionary
-user_cooldowns = {}
-auto_buff_tasks = {}
+# /start
+@app.on_message(filters.command("start"))
+async def start(client, message: Message):
+    await message.reply("🤖 Bot Bảo Huy 👨‍💻 Xứ sẵn sàng phục vụ!\nDùng /help để xem danh sách lệnh.")
 
-# Tắt cảnh báo SSL
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# /help
+@app.on_message(filters.command("help"))
+async def help_command(client, message: Message):
+    await message.reply(
+        "**📜 Danh sách lệnh:**\n"
+        "/uid [url fb]\n"
+        "/postid [url fb]\n"
+        "/2fa [mã chữ]\n"
+        "/shareao [uid] [cookies]\n"
+        "/tiktok1 [username]\n"
+        "/tiktok2 [username]\n"
+        "/videott1 [url]\n"
+        "/videott2 [url]\n"
+        "/folow1 [username]\n"
+        "/folow2 [username]\n"
+        "/folow3 [username]\n"
+        "/like [url]\n"
+        "/view [url]\n"
+        "/insta [username]\n"
+        "/zalo [sdt]\n"
+        "/cccd\n"
+        "/passport\n"
+        "/uptime"
+    )
 
-def is_on_cooldown(user_id, command):
-    now = time.time()
-    key = f"{user_id}_{command}"
-    if key in user_cooldowns:
-        if now - user_cooldowns[key] < 30:
-            return True
-    user_cooldowns[key] = now
-    return False
-
-def auto_buff(username, chat_id, user_id):
-    if user_id not in auto_buff_tasks:
-        return
-    api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
+# Hàm tiện ích gọi API có xử lý lỗi
+def safe_request(method, url, **kwargs):
     try:
-        response = requests.get(api_url, timeout=80)
-        data = response.json()
-        bot.send_message(chat_id, f"✅ Tự động buff cho `@{username}` thành công!\n"
-                                  f"➕ Thêm: {data.get('followers_add', 0)}\n"
-                                  f"💬 {data.get('message', 'Không có')}",
-                         parse_mode="Markdown")
+        res = requests.request(method, url, **kwargs)
+        return res.text
     except Exception as e:
-        bot.send_message(chat_id, f"❌ Lỗi khi tự động buff: {e}")
+        logging.error(f"Lỗi khi gọi API {url}: {e}")
+        return f"⚠️ Lỗi khi gọi API: {e}"
 
-    if user_id in auto_buff_tasks:
-        task = threading.Timer(900, auto_buff, args=[username, chat_id, user_id])
-        auto_buff_tasks[user_id] = task
-        task.start()
+# Các lệnh xử lý API
+@app.on_message(filters.command("uid"))
+async def get_uid(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Vui lòng nhập URL Facebook.")
+    url = message.command[1]
+    await message.reply(safe_request("GET", f"https://example.com/facebook-uid?url={url}"))
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message,
-        "Xin chào!\n"
-        "Sử dụng các lệnh sau để kiểm tra tài khoản TikTok:\n\n"
-        "`/buff <username>` - Kiểm tra bằng API 2\n"
-        "`/fl3 <username>` - Kiểm tra bằng API 3 (Soundcast)\n"
-        "`/treo <username>` - Tự động buff mỗi 15 phút (chỉ admin)\n"
-        "`/huytreo` - Huỷ treo\n\n"
-        "Ví dụ: `/buff baohuydz158`, `/treo baohuydz158`",
-        parse_mode="Markdown"
-    )
+@app.on_message(filters.command("postid"))
+async def post_id(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập URL bài viết.")
+    url = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/getpostfb.php?key=hoangdaixu&url={url}"))
 
-@bot.message_handler(commands=['buff'])
-def handle_buff(message):
-    if is_on_cooldown(message.from_user.id, 'buff'):
-        bot.reply_to(message, "⏳ Vui lòng đợi 30 giây trước khi dùng lại lệnh này.")
-        return
+@app.on_message(filters.command("2fa"))
+async def to_2fa(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập mã 2FA.")
+    code = " ".join(message.command[1:])
+    await message.reply(safe_request("POST", "https://hoangdaixu.x10.bz/api/to2fa.php?key=hoangdaixuhoangdaixu", data={"code": code}))
 
-    parts = message.text.strip().split()
-    if len(parts) < 2:
-        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/buff baohuydz158`", parse_mode="Markdown")
-        return
-    username = parts[1].lstrip("@")
+@app.on_message(filters.command("shareao"))
+async def share_ao(client, message: Message):
+    if len(message.command) < 3:
+        return await message.reply("❌ Nhập dạng: /shareao uid cookies")
+    uid = message.command[1]
+    cookies = message.command[2]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/api-shareao.php?cookies={cookies}&uid={uid}"))
 
-    bot.send_chat_action(message.chat.id, "typing")
-    time.sleep(1)
-    bot.reply_to(message, f"🔍 Đang kiểm tra `@{username}` bằng API 2...", parse_mode="Markdown")
+@app.on_message(filters.command("tiktok1"))
+async def tiktok1(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập username TikTok.")
+    username = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/infotiktok.php?key=hoangdaixu&username={username}"))
 
-    api_url = f"https://dichvukey.site/fl.php?username={username}&key=ngocanvip"
+@app.on_message(filters.command("tiktok2"))
+async def tiktok2(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập username TikTok.")
+    username = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/infotiktokv2.php?key=hoangdaixu&username={username}"))
 
-    try:
-        response = requests.get(api_url, timeout=80)
-        response.raise_for_status()
-        data = response.json()
-    except requests.exceptions.RequestException:
-        bot.reply_to(message, "❌ Lỗi khi kết nối với API. Vui lòng thử lại sau.")
-        return
-    except ValueError:
-        bot.reply_to(message, f"✅Thông báo: {response.text.strip()}")
-        return
+@app.on_message(filters.command("videott1"))
+async def video_tt1(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập URL video TikTok.")
+    url = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/infovideott.php?key=hoangdaixu&urlvideo={url}"))
 
-    if str(data.get("status", "")).lower() not in ["true", "1", "success"]:
-        bot.reply_to(message, f"✅Thông báo: {data.get('message', 'Tăng Thành công')}")
-        return
+@app.on_message(filters.command("videott2"))
+async def video_tt2(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập URL video TikTok.")
+    url = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/infovdttv2.php?key=hoangdaixu&urlvideo={url}"))
 
-    reply_text = (
-        f"✅ *Thông tin tài khoản (API 2):*\n\n"
-        f"💬 *Thông báo:* {data.get('message', 'Không có')}\n"
-        f"👥 *Followers Trước:* {data.get('followers_before', 0)}\n"
-        f"👥 *Followers Sau:* {data.get('followers_after', 0)}\n"
-        f"✨ *Đã thêm:* {data.get('followers_add', 0)}\n\n"
-        f"🔍 *Trạng thái:* ✅"
-    )
-    bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
+@app.on_message(filters.command("folow1"))
+async def follow1(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập username.")
+    username = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/autofl.php?key=dinhhoang&username={username}"))
 
-@bot.message_handler(commands=['fl3'])
-def handle_fl3(message):
-    if is_on_cooldown(message.from_user.id, 'fl3'):
-        bot.reply_to(message, "⏳ Vui lòng đợi 30 giây trước khi dùng lại lệnh này.")
-        return
+@app.on_message(filters.command("folow2"))
+async def follow2(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập username.")
+    username = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/autofl2.php?key=dinhhoang&username={username}"))
 
-    parts = message.text.strip().split()
-    if len(parts) < 2:
-        bot.reply_to(message, "❌ Vui lòng cung cấp tên người dùng TikTok. Ví dụ: `/fl3 ngocanvip`", parse_mode="Markdown")
-        return
-    username = parts[1].lstrip("@")
+@app.on_message(filters.command("folow3"))
+async def follow3(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập username.")
+    username = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/dinhhoang.php?key=toladinhhoang&username={username}"))
 
-    bot.send_chat_action(message.chat.id, "typing")
-    time.sleep(1)
-    bot.reply_to(message, f"🔍 Đang kiểm tra `@{username}` bằng API 3...", parse_mode="Markdown")
+@app.on_message(filters.command("like"))
+async def like(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập link video.")
+    url = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/cronview.php?key=hoangdaixu&link={url}&type=like"))
 
-    api_url = f"https://nvp310107.x10.mx/fltik.php?username={username}&key=30T42025VN"
+@app.on_message(filters.command("view"))
+async def view(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập link video.")
+    url = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/cronview.php?key=hoangdaixu&link={url}&type=view"))
 
-    try:
-        response = requests.get(api_url, timeout=300, verify=False)
-        response.raise_for_status()
-        data = response.json()
-    except requests.exceptions.RequestException:
-        bot.reply_to(message, "❌ Không thể kết nối đến API 3. Vui lòng thử lại sau.")
-        return
-    except ValueError:
-        bot.reply_to(message, f"✅Thông báo: {response.text.strip()}")
-        return
+@app.on_message(filters.command("insta"))
+async def insta(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập username Instagram.")
+    username = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/infoins.php?key=hoangdaixu&username={username}"))
 
-    reply_text = (
-        f"✅ *Thông tin tài khoản (API 3):*\n\n"
-        f"💬 *Thông báo:* {data.get('message', 'Không có')}\n"
-        f"👥 *Followers Trước:* {data.get('followers_before', 'N/A')}\n"
-        f"👥 *Followers Sau:* {data.get('followers_after', 'N/A')}\n"
-        f"✨ *Đã thêm:* {data.get('followers_add', 'N/A')}\n\n"
-        f"🔍 *Trạng thái:* {data.get('status', 'Không rõ')}"
-    )
-    bot.reply_to(message, reply_text, parse_mode="Markdown", disable_web_page_preview=True)
+@app.on_message(filters.command("zalo"))
+async def zalo(client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("❌ Nhập số điện thoại.")
+    sdt = message.command[1]
+    await message.reply(safe_request("GET", f"https://hoangdaixu.x10.bz/api/zalo.php?key=hoangdaixu&sdt={sdt}"))
 
-@bot.message_handler(commands=['treo'])
-def handle_treo(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "❌ Lệnh này chỉ admin được phép sử dụng.")
-        return
+# CCCD & Passport
+@app.on_message(filters.command("cccd"))
+async def cccd(client, message: Message):
+    await message.reply("🔖 Tạo CCCD ảo tại:\nhttps://hoangdaixu.x10.bz/cccd/")
 
-    parts = message.text.strip().split()
-    if len(parts) < 2:
-        bot.reply_to(message, "❌ Vui lòng cung cấp username TikTok. Ví dụ: `/treo baohuydz158`", parse_mode="Markdown")
-        return
+@app.on_message(filters.command("passport"))
+async def passport(client, message: Message):
+    await message.reply("🛂 Tạo hộ chiếu ảo tại:\nhttps://hoangdaixu.x10.bz/passport/")
 
-    username = parts[1].lstrip("@")
-    user_id = message.from_user.id
-    chat_id = message.chat.id
-
-    if user_id in auto_buff_tasks:
-        bot.reply_to(message, "⚠️ Đang treo rồi. Muốn treo khác thì dùng `/huytreo` trước.")
-        return
-
-    bot.reply_to(message, f"✅ Đã bắt đầu tự động buff `@{username}` mỗi 15 phút.", parse_mode="Markdown")
-    auto_buff_tasks[user_id] = None
-    auto_buff(username, chat_id, user_id)
-
-@bot.message_handler(commands=['huytreo'])
-def handle_huytreo(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "❌ Lệnh này chỉ admin được phép sử dụng.")
-        return
-
-    user_id = message.from_user.id
-    task = auto_buff_tasks.pop(user_id, None)
-    if task:
-        task.cancel()
-
-    bot.reply_to(message, "✅ Đã dừng tự động buff.")
+@app.on_message(filters.command("uptime"))
+async def uptime(client, message: Message):
+    uptime_seconds = int(time.time() - start_time)
+    hours, remainder = divmod(uptime_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    await message.reply(f"⏱ Bot đã hoạt động: {hours} giờ {minutes} phút {seconds} giây.")
 
 # Chạy bot
-if __name__ == "__main__":
-    print("Bot đang chạy...")
-    bot.infinity_polling()
+app.run()
