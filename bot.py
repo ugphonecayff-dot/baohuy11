@@ -1,15 +1,16 @@
+# main.py
+from telegram import Update, InputFile
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from openai import OpenAI
+from keep_alive import keep_alive
 import base64
 import json
 import os
-import openai
-from telegram import Update, InputFile
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-from keep_alive import keep_alive  # Gọi server keep-alive
 
 # ========== CONFIG ==========
 TELEGRAM_TOKEN = "6367532329:AAGJh1RnIa-UZGBUdzKHTy3lyKnB81NdqjM"
 OPENAI_API_KEY = "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"
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ========== GIẢI MÃ ==========
 def is_base64(s):
@@ -63,7 +64,7 @@ def decode_languagemap(encoded_str):
 # ========== CHATGPT ==========
 async def ask_chatgpt(prompt):
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
@@ -73,7 +74,7 @@ async def ask_chatgpt(prompt):
     except Exception as e:
         return f"❌ Lỗi ChatGPT: {str(e)}"
 
-# ========== HANDLER ==========
+# ========== TELEGRAM HANDLERS ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Gửi tôi chuỗi mã hóa để giải mã, hoặc đặt câu hỏi để tôi hỏi AI!")
 
@@ -99,9 +100,9 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     file_obj = await file.get_file()
-    temp = await file_obj.download_to_drive()
-    
-    with open(temp.name, 'r', encoding='utf-8') as f:
+    temp_path = await file_obj.download_to_drive()
+
+    with open(temp_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
     result, parsed = decode_languagemap(content)
@@ -112,10 +113,10 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             json.dump(parsed, f, indent=2, ensure_ascii=False)
         await update.message.reply_document(InputFile("decoded.json"))
         os.remove("decoded.json")
-    
-    os.remove(temp.name)
 
-# ========== CHẠY BOT ==========
+    os.remove(temp_path)
+
+# ========== MAIN ==========
 if __name__ == "__main__":
     keep_alive()
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
