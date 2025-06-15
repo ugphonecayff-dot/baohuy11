@@ -6,7 +6,7 @@ import time
 
 # === THÔNG TIN BẢO MẬT ===
 TELEGRAM_TOKEN = '6367532329:AAGJh1RnIa-UZGBUdzKHTy3lyKnB81NdqjM'
-OPENAI_API_KEY = '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'
+OPENAI_API_KEY = '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'
 
 # === KHỞI TẠO BOT & OPENAI ===
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
