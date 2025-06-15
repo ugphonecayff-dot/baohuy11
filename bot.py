@@ -2,9 +2,10 @@ import telebot
 import os
 import time
 import logging
+import requests
 from dotenv import load_dotenv
 from keep_alive import keep_alive
-from openai import OpenAI, OpenAIError
+from openai import OpenAI
 
 # === TẢI .env ===
 load_dotenv()
@@ -22,14 +23,14 @@ logging.basicConfig(
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 keep_alive()
 
-# === ADMIN VÀ DANH SÁCH KEY ===
+# === ADMIN & KEY ===
 ADMIN_IDS = [5736655322]
 KEY_FILE = "keys.txt"
 api_keys = []
 current_key_index = 0
 client = None
 
-# === LOAD KEY TỪ FILE ===
+# === LOAD KEY ===
 def load_keys():
     global api_keys
     if os.path.exists(KEY_FILE):
@@ -52,7 +53,7 @@ def get_uptime():
     m, s = divmod(rem, 60)
     return f"⏱ Uptime: {h}h {m}m {s}s"
 
-# === ĐỔI KEY HIỆN TẠI ===
+# === CHUYỂN KEY ===
 def get_current_key():
     return api_keys[current_key_index]
 
@@ -63,12 +64,31 @@ def switch_to_key(index):
 
 switch_to_key(0)
 
+# === KIỂM TRA KEY GIỐNG CÁCH CURL ===
+def test_openai_key_direct(key: str) -> bool:
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {key}"
+    }
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Ping"}],
+        "max_tokens": 5
+    }
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        logging.error(f"Lỗi kiểm tra key trực tiếp: {e}")
+        return False
+
 # === LỆNH CƠ BẢN ===
 @bot.message_handler(commands=["start", "help"])
 def welcome(message):
     bot.reply_to(message,
-        "🤖 Xin chào! Tôi là trợ lý Bảo Huy🌎 sử dụng GPT-4.\n\n"
-        "✏️ Gõ bất kỳ nội dung nào để tôi trả lời bạn.\n\n"
+        "🤖 Xin chào! Tôi là trợ lý AI sử dụng GPT-4.\n\n"
+        "✏️ Gõ nội dung để tôi trả lời bạn.\n\n"
         "📚 Lệnh:\n/start hoặc /help - Giới thiệu bot\n/uptime - Thời gian hoạt động bot\n/addkey - (Chỉ admin) thêm API key"
     )
 
@@ -76,7 +96,7 @@ def welcome(message):
 def uptime(message):
     bot.reply_to(message, get_uptime())
 
-# === LỆNH THÊM KEY ===
+# === LỆNH ADD KEY ===
 @bot.message_handler(commands=['addkey'])
 def add_key(message):
     user_id = message.from_user.id
@@ -86,27 +106,22 @@ def add_key(message):
 
     parts = message.text.strip().split(" ", 1)
     if len(parts) != 2 or not parts[1].startswith("sk-"):
-        bot.reply_to(message, "⚠️ Vui lòng nhập đúng cú pháp:\n`/addkey sk-...`", parse_mode='Markdown')
+        bot.reply_to(message, "⚠️ Dùng đúng cú pháp:\n`/addkey sk-...`", parse_mode='Markdown')
         return
 
     new_key = parts[1].strip()
-    test_client = OpenAI(api_key=new_key)
-    try:
-        test_client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": "Ping"}],
-            max_tokens=1,
-            timeout=10
-        )
+    bot.reply_to(message, "🔍 Đang kiểm tra key mới...")
+
+    if test_openai_key_direct(new_key):
         if new_key not in api_keys:
             api_keys.append(new_key)
             save_keys()
         switch_to_key(api_keys.index(new_key))
-        bot.reply_to(message, "✅ Key đã được thêm và sử dụng.")
-    except OpenAIError as e:
-        bot.reply_to(message, f"❌ Key không hợp lệ hoặc đã hết hạn.\n{e}")
+        bot.send_message(message.chat.id, "✅ Key hợp lệ và đã được sử dụng.")
+    else:
+        bot.send_message(message.chat.id, "❌ Key không hợp lệ hoặc đã hết hạn.")
 
-# === XỬ LÝ TIN NHẮN NGƯỜI DÙNG ===
+# === XỬ LÝ CHAT ===
 @bot.message_handler(func=lambda m: True)
 def handle_message(message):
     username = message.from_user.username or "unknown"
@@ -131,8 +146,8 @@ def handle_message(message):
             if attempt < len(api_keys) - 1:
                 switch_to_key((current_key_index + 1) % len(api_keys))
             else:
-                bot.edit_message_text(f"⚠️ Đã xảy ra lỗi ở tất cả key:\n{e}", chat_id=wait_msg.chat.id, message_id=wait_msg.message_id)
+                bot.edit_message_text(f"⚠️ Đã lỗi ở tất cả key:\n{e}", chat_id=wait_msg.chat.id, message_id=wait_msg.message_id)
 
-# === KHỞI CHẠY BOT ===
+# === CHẠY BOT ===
 logging.info("🤖 Bot Telegram GPT-4 đang chạy...")
 bot.infinity_polling(timeout=10, long_polling_timeout=5)
