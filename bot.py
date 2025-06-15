@@ -1,151 +1,128 @@
-from pyrogram import Client, filters
-from pyrogram.types import Message
-from dotenv import load_dotenv
-import requests
+import base64
+import json
 import os
-import time
+import openai
+from telegram import Update, InputFile
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from keep_alive import keep_alive  # Gọi server keep-alive
 
-# Load biến môi trường từ file .env
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# ========== CONFIG ==========
+TELEGRAM_TOKEN = "6367532329:AAGJh1RnIa-UZGBUdzKHTy3lyKnB81NdqjM"
+OPENAI_API_KEY = "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"
+openai.api_key = OPENAI_API_KEY
 
-# Khởi tạo bot
-app = Client("HoangDaiXuBot", bot_token=BOT_TOKEN)
-
-# Thời gian khởi động bot
-start_time = time.time()
-
-# Lệnh /start
-@app.on_message(filters.command("start"))
-async def start(client, message: Message):
-    await message.reply("🤖 Bot Bảo Huy 👨‍💻 Xứ sẵn sàng phục vụ!\nDùng /help để xem danh sách lệnh.")
-
-# Lệnh /help
-@app.on_message(filters.command("help"))
-async def help_command(client, message: Message):
-    await message.reply(
-        "**📜 Danh sách lệnh:**\n"
-        "/uid [url fb]\n/postid [url fb]\n/2fa [mã chữ]\n"
-        "/shareao [uid] [cookies]\n/tiktok1 [username]\n/tiktok2 [username]\n"
-        "/videott1 [url]\n/videott2 [url]\n"
-        "/folow1 [username]\n/folow2 [username]\n/folow3 [username]\n"
-        "/like [url]\n/view [url]\n"
-        "/insta [username]\n/zalo [sdt]\n"
-        "/cccd\n/passport\n/uptime"
-    )
-
-# Hàm tiện ích gửi request và trả kết quả
-async def send_api_response(message: Message, url: str):
+# ========== GIẢI MÃ ==========
+def is_base64(s):
     try:
-        res = requests.get(url)
-        await message.reply(res.text)
-    except Exception as e:
-        await message.reply(f"❌ Lỗi: {e}")
-
-# UID
-@app.on_message(filters.command("uid"))
-async def get_uid(client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("❌ Nhập URL Facebook.")
-    await send_api_response(message, f"https://example.com/facebook-uid?url={message.command[1]}")
-
-# PostID
-@app.on_message(filters.command("postid"))
-async def post_id(client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("❌ Nhập URL bài viết.")
-    await send_api_response(message, f"https://hoangdaixu.x10.bz/api/getpostfb.php?key=hoangdaixu&url={message.command[1]}")
-
-# 2FA
-@app.on_message(filters.command("2fa"))
-async def to_2fa(client, message: Message):
-    code = " ".join(message.command[1:])
-    try:
-        res = requests.post("https://hoangdaixu.x10.bz/api/to2fa.php?key=hoangdaixuhoangdaixu", data={"code": code})
-        await message.reply(res.text)
-    except Exception as e:
-        await message.reply(f"❌ Lỗi: {e}")
-
-# Share ảo
-@app.on_message(filters.command("shareao"))
-async def share_ao(client, message: Message):
-    try:
-        uid = message.command[1]
-        cookies = message.command[2]
-        await send_api_response(message, f"https://hoangdaixu.x10.bz/api/api-shareao.php?cookies={cookies}&uid={uid}")
+        return base64.b64encode(base64.b64decode(s)).decode() == s
     except:
-        await message.reply("❌ Nhập dạng: /shareao uid cookies")
+        return False
 
-# TikTok info
-@app.on_message(filters.command(["tiktok1", "tiktok2"]))
-async def tiktok_info(client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("❌ Nhập username TikTok.")
-    username = message.command[1]
-    api = "infotiktok.php" if message.command[0] == "tiktok1" else "infotiktokv2.php"
-    await send_api_response(message, f"https://hoangdaixu.x10.bz/api/{api}?key=hoangdaixu&username={username}")
+def is_hex(s):
+    try:
+        bytes.fromhex(s)
+        return True
+    except:
+        return False
 
-# TikTok video
-@app.on_message(filters.command(["videott1", "videott2"]))
-async def tiktok_video(client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("❌ Nhập URL video TikTok.")
-    url = message.command[1]
-    api = "infovideott.php" if message.command[0] == "videott1" else "infovdttv2.php"
-    await send_api_response(message, f"https://hoangdaixu.x10.bz/api/{api}?key=hoangdaixu&urlvideo={url}")
+def try_json(s):
+    try:
+        return json.loads(s)
+    except:
+        return None
 
-# Follow TikTok
-@app.on_message(filters.command(["folow1", "folow2", "folow3"]))
-async def follow_tiktok(client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("❌ Nhập username.")
-    username = message.command[1]
-    if message.command[0] == "folow1":
-        url = f"https://hoangdaixu.x10.bz/api/autofl.php?key=dinhhoang&username={username}"
-    elif message.command[0] == "folow2":
-        url = f"https://hoangdaixu.x10.bz/api/autofl2.php?key=dinhhoang&username={username}"
+def decode_languagemap(encoded_str):
+    decoded_str = ""
+    parsed_data = None
+
+    if is_base64(encoded_str):
+        try:
+            decoded_str = base64.b64decode(encoded_str).decode('utf-8')
+        except Exception:
+            return "❌ Lỗi giải mã Base64.", None
+    elif is_hex(encoded_str):
+        try:
+            decoded_str = bytes.fromhex(encoded_str).decode('utf-8')
+        except Exception:
+            return "❌ Lỗi giải mã Hex.", None
     else:
-        url = f"https://hoangdaixu.x10.bz/api/dinhhoang.php?key=toladinhhoang&username={username}"
-    await send_api_response(message, url)
+        decoded_str = encoded_str
 
-# Like & View
-@app.on_message(filters.command(["like", "view"]))
-async def like_view(client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("❌ Nhập URL.")
-    type_ = message.command[0]
-    url = f"https://hoangdaixu.x10.bz/api/cronview.php?key=hoangdaixu&link={message.command[1]}&type={type_}"
-    await send_api_response(message, url)
+    if decoded_str.startswith("languagemap:"):
+        decoded_str = decoded_str[len("languagemap:"):].strip()
 
-# Instagram
-@app.on_message(filters.command("insta"))
-async def insta(client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("❌ Nhập username Instagram.")
-    await send_api_response(message, f"https://hoangdaixu.x10.bz/api/infoins.php?key=hoangdaixu&username={message.command[1]}")
+    parsed_data = try_json(decoded_str)
+    if parsed_data:
+        return (
+            f"✅ Giải mã thành công!\n\n<pre>{json.dumps(parsed_data, indent=2, ensure_ascii=False)}</pre>",
+            parsed_data
+        )
+    else:
+        return f"📄 Chuỗi giải mã:\n<pre>{decoded_str}</pre>", None
 
-# Zalo
-@app.on_message(filters.command("zalo"))
-async def zalo(client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("❌ Nhập số điện thoại.")
-    await send_api_response(message, f"https://hoangdaixu.x10.bz/api/zalo.php?key=hoangdaixu&sdt={message.command[1]}")
+# ========== CHATGPT ==========
+async def ask_chatgpt(prompt):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1000
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"❌ Lỗi ChatGPT: {str(e)}"
 
-# CCCD & Passport
-@app.on_message(filters.command("cccd"))
-async def cccd(client, message: Message):
-    await message.reply("🔖 Tạo CCCD ảo tại:\nhttps://hoangdaixu.x10.bz/cccd/")
+# ========== HANDLER ==========
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Gửi tôi chuỗi mã hóa để giải mã, hoặc đặt câu hỏi để tôi hỏi AI!")
 
-@app.on_message(filters.command("passport"))
-async def passport(client, message: Message):
-    await message.reply("🛂 Tạo hộ chiếu ảo tại:\nhttps://hoangdaixu.x10.bz/passport/")
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    result, parsed = decode_languagemap(text)
 
-# Uptime
-@app.on_message(filters.command("uptime"))
-async def uptime(client, message: Message):
-    uptime_seconds = int(time.time() - start_time)
-    h, m, s = uptime_seconds // 3600, (uptime_seconds % 3600) // 60, uptime_seconds % 60
-    await message.reply(f"⏱ Bot đã hoạt động: {h} giờ {m} phút {s} giây.")
+    if parsed:
+        await update.message.reply_text(result, parse_mode='HTML')
+        with open("decoded.json", "w", encoding="utf-8") as f:
+            json.dump(parsed, f, indent=2, ensure_ascii=False)
+        await update.message.reply_document(InputFile("decoded.json"))
+        os.remove("decoded.json")
+    else:
+        await update.message.reply_text("🤖 Đang hỏi ChatGPT...")
+        reply = await ask_chatgpt(text)
+        await update.message.reply_text(reply)
 
-# Khởi động bot
-app.run()
+async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    file = update.message.document
+    if file.mime_type not in ['application/json', 'text/plain']:
+        await update.message.reply_text("⚠️ Chỉ hỗ trợ file .json hoặc .txt")
+        return
+
+    file_obj = await file.get_file()
+    temp = await file_obj.download_to_drive()
+    
+    with open(temp.name, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    result, parsed = decode_languagemap(content)
+    await update.message.reply_text(result, parse_mode='HTML')
+
+    if parsed:
+        with open("decoded.json", "w", encoding="utf-8") as f:
+            json.dump(parsed, f, indent=2, ensure_ascii=False)
+        await update.message.reply_document(InputFile("decoded.json"))
+        os.remove("decoded.json")
+    
+    os.remove(temp.name)
+
+# ========== CHẠY BOT ==========
+if __name__ == "__main__":
+    keep_alive()
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
+
+    print("🤖 Bot đang chạy...")
+    app.run_polling()
