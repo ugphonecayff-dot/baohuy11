@@ -7,4 +7,3 @@ tgcrypto
 requests
 dotenv
 openai
-upgrade
