@@ -1,10 +1,10 @@
 import telebot
-import openai
 import os
 import time
 import logging
 from dotenv import load_dotenv
 from keep_alive import keep_alive
+from openai import OpenAI, OpenAIError
 
 # === TẢI .env ===
 load_dotenv()
@@ -18,17 +18,18 @@ logging.basicConfig(
     format='[%(asctime)s] %(levelname)s - %(message)s'
 )
 
-# === KHỞI TẠO BOT ===
+# === KHỞI TẠO BOT TELEGRAM ===
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 keep_alive()
 
-# === ADMIN & API KEY DANH SÁCH ===
+# === ADMIN VÀ DANH SÁCH KEY ===
 ADMIN_IDS = [5736655322]
 KEY_FILE = "keys.txt"
 api_keys = []
 current_key_index = 0
+client = None
 
-# === ĐỌC KEY TỪ FILE ===
+# === LOAD KEY TỪ FILE ===
 def load_keys():
     global api_keys
     if os.path.exists(KEY_FILE):
@@ -43,7 +44,7 @@ def save_keys():
     with open(KEY_FILE, "w") as f:
         f.write("\n".join(api_keys))
 
-# === THỜI GIAN UPTIME ===
+# === UPTIME ===
 start_time = time.time()
 def get_uptime():
     elapsed = int(time.time() - start_time)
@@ -51,14 +52,14 @@ def get_uptime():
     m, s = divmod(rem, 60)
     return f"⏱ Uptime: {h}h {m}m {s}s"
 
-# === LẤY KEY HIỆN TẠI ===
+# === ĐỔI KEY HIỆN TẠI ===
 def get_current_key():
     return api_keys[current_key_index]
 
 def switch_to_key(index):
-    global current_key_index
+    global current_key_index, client
     current_key_index = index
-    openai.api_key = api_keys[current_key_index]
+    client = OpenAI(api_key=api_keys[current_key_index])
 
 switch_to_key(0)
 
@@ -66,7 +67,7 @@ switch_to_key(0)
 @bot.message_handler(commands=["start", "help"])
 def welcome(message):
     bot.reply_to(message,
-        "🤖 Xin chào! Tôi là trợ lý AI sử dụng GPT-4.\n\n"
+        "🤖 Xin chào! Tôi là trợ lý Bảo Huy🌎 sử dụng GPT-4.\n\n"
         "✏️ Gõ bất kỳ nội dung nào để tôi trả lời bạn.\n\n"
         "📚 Lệnh:\n/start hoặc /help - Giới thiệu bot\n/uptime - Thời gian hoạt động bot\n/addkey - (Chỉ admin) thêm API key"
     )
@@ -75,7 +76,7 @@ def welcome(message):
 def uptime(message):
     bot.reply_to(message, get_uptime())
 
-# === LỆNH THÊM KEY CHỈ DÀNH CHO ADMIN ===
+# === LỆNH THÊM KEY ===
 @bot.message_handler(commands=['addkey'])
 def add_key(message):
     user_id = message.from_user.id
@@ -89,11 +90,11 @@ def add_key(message):
         return
 
     new_key = parts[1].strip()
+    test_client = OpenAI(api_key=new_key)
     try:
-        openai.api_key = new_key
-        openai.ChatCompletion.create(
+        test_client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": "Test key"}],
+            messages=[{"role": "user", "content": "Ping"}],
             max_tokens=1,
             timeout=10
         )
@@ -101,8 +102,8 @@ def add_key(message):
             api_keys.append(new_key)
             save_keys()
         switch_to_key(api_keys.index(new_key))
-        bot.reply_to(message, f"✅ Đã thêm key mới và chuyển sang sử dụng.")
-    except Exception as e:
+        bot.reply_to(message, "✅ Key đã được thêm và sử dụng.")
+    except OpenAIError as e:
         bot.reply_to(message, f"❌ Key không hợp lệ hoặc đã hết hạn.\n{e}")
 
 # === XỬ LÝ TIN NHẮN NGƯỜI DÙNG ===
@@ -113,10 +114,10 @@ def handle_message(message):
     logging.info(f"Người dùng: @{username} | Nội dung: {content}")
 
     wait_msg = bot.reply_to(message, "⏳ Đang xử lý...")
+
     for attempt in range(len(api_keys)):
         try:
-            openai.api_key = get_current_key()
-            response = openai.ChatCompletion.create(
+            response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": content}],
                 max_tokens=1000,
