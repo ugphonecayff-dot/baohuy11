@@ -9,8 +9,12 @@ import os
 
 # ========== CONFIG ==========
 TELEGRAM_TOKEN = "6367532329:AAGJh1RnIa-UZGBUdzKHTy3lyKnB81NdqjM"
-OPENAI_API_KEY = "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"
-client = OpenAI(api_key=OPENAI_API_KEY)
+ADMIN_USER_ID = 5736655322
+
+OPENAI_API_KEYS = [
+    "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",
+    "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"
+]
 
 # ========== GIẢI MÃ ==========
 def is_base64(s):
@@ -62,40 +66,41 @@ def decode_languagemap(encoded_str):
         return f"📄 Chuỗi giải mã:\n<pre>{decoded_str}</pre>", None
 
 # ========== CHATGPT ==========
-async def ask_chatgpt(prompt):
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=1000
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"❌ Lỗi ChatGPT: {str(e)}"
+async def ask_chatgpt(prompt, context=None):
+    global OPENAI_API_KEYS
+    last_error = None
 
-# ========== TỰ ĐỘNG TRẢ LỜI ==========
-PREDEFINED_RESPONSES = {
-    "xin chào": "Chào bạn! Tôi là bot trợ lý. Hãy gửi chuỗi mã hoá hoặc câu hỏi cần giải đáp.",
-    "help": "Bạn có thể gửi chuỗi mã hoá để giải mã, hoặc đặt câu hỏi để hỏi AI (ChatGPT).",
-    "ai là gì": "AI là trí tuệ nhân tạo (Artificial Intelligence). Tôi sử dụng AI để giúp bạn!"
-}
+    for key in OPENAI_API_KEYS.copy():
+        try:
+            client = OpenAI(api_key=key)
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1000
+            )
+            return response.choices[0].message.content.strip()
 
-def check_predefined_response(text):
-    key = text.lower().strip()
-    return PREDEFINED_RESPONSES.get(key, None)
+        except Exception as e:
+            last_error = str(e)
+
+            if context:
+                await context.bot.send_message(
+                    chat_id=ADMIN_USER_ID,
+                    text=f"⚠️ API Key lỗi:\n{key[:25]}...\n\nLỗi: {last_error}"
+                )
+
+            OPENAI_API_KEYS.remove(key)
+
+    return f"❌ Tất cả API key đều lỗi.\nChi tiết lỗi cuối: {last_error}"
 
 # ========== TELEGRAM HANDLERS ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Gửi tôi chuỗi mã hóa để giải mã, hoặc đặt câu hỏi để tôi hỏi AI!")
+    user_id = update.effective_user.id
+    await update.message.reply_text(f"👋 Xin chào! ID của bạn là: {user_id}")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-
-    predefined = check_predefined_response(text)
-    if predefined:
-        await update.message.reply_text(predefined)
-        return
 
     result, parsed = decode_languagemap(text)
 
@@ -106,8 +111,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_document(InputFile("decoded.json"))
         os.remove("decoded.json")
     else:
-        await update.message.reply_text("🤖 Đang hỏi ChatGPT...")
-        reply = await ask_chatgpt(text)
+        await update.message.reply_text("🤖 Đang xử lý yêu cầu của bạn...")
+        reply = await ask_chatgpt(text, context)
         await update.message.reply_text(reply)
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
