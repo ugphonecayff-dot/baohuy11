@@ -1,39 +1,128 @@
-import telebot
 import os
 import time
 import logging
 from dotenv import load_dotenv
 from keep_alive import keep_alive
+import telebot
 from openai import OpenAI, OpenAIError
 
-# === TẢI .env ===
+# === LOAD ENV ===
 load_dotenv()
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN") or "6367532329:AAGJh1RnIa-UZGBUdzKHTy3lyKnB81NdqjM"
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or "sk-proj-..."
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+DEFAULT_KEY = os.getenv("OPENAI_API_KEY")
 
-# === CẤU HÌNH LOG ===
-logging.basicConfig(filename='bot.log', level=logging.INFO, format='[%(asctime)s] %(levelname)s - %(message)s')
-
-# === KHỞI TẠO BOT ===
+# === CẤU HÌNH ===
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 keep_alive()
-
-# === ADMIN & DANH SÁCH KEY ===
-ADMIN_IDS = [5736655322]
+ADMIN_IDS = [6367532329]
 KEY_FILE = "keys.txt"
 api_keys = []
 current_key_index = 0
+start_time = time.time()
 
-# === TẢI KEY ===
+# === LOGGING ===
+logging.basicConfig(
+    filename="bot.log",
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s - %(message)s'
+)
+
+# === HÀM QUẢN LÝ KEY ===
 def load_keys():
     global api_keys
     if os.path.exists(KEY_FILE):
         with open(KEY_FILE, "r") as f:
             api_keys = [line.strip() for line in f if line.strip().startswith("sk-")]
-    if not api_keys:
-        api_keys = [OPENAI_API_KEY]
-load_keys()
+    if not api_keys and DEFAULT_KEY:
+        api_keys = [DEFAULT_KEY]
 
+def save_keys():
+    with open(KEY_FILE, "w") as f:
+        f.write("\n".join(api_keys))
+
+def switch_to_key(index):
+    global current_key_index, client
+    current_key_index = index
+    client = OpenAI(api_key=api_keys[current_key_index])
+
+load_keys()
+switch_to_key(0)
+
+def get_uptime():
+    elapsed = int(time.time() - start_time)
+    h, rem = divmod(elapsed, 3600)
+    m, s = divmod(rem, 60)
+    return f"⏱ Uptime: {h}h {m}m {s}s"
+
+# === COMMAND: START / HELP ===
+@bot.message_handler(commands=["start", "help"])
+def cmd_start(message):
+    bot.reply_to(message,
+        "🤖 Xin chào! Tôi là bot GPT-4.\n\n"
+        "📚 Lệnh:\n"
+        "/start - Giới thiệu\n"
+        "/uptime - Thời gian hoạt động\n"
+        "/addkey <sk-...> - (Admin) thêm key"
+    )
+
+@bot.message_handler(commands=["uptime"])
+def cmd_uptime(message):
+    bot.reply_to(message, get_uptime())
+
+# === ADMIN THÊM KEY ===
+@bot.message_handler(commands=["addkey"])
+def cmd_addkey(message):
+    if message.from_user.id not in ADMIN_IDS:
+        bot.reply_to(message, "🚫 Bạn không có quyền sử dụng lệnh này.")
+        return
+
+    parts = message.text.strip().split(" ", 1)
+    if len(parts) != 2 or not parts[1].startswith("sk-"):
+        bot.reply_to(message, "⚠️ Dùng đúng cú pháp: `/addkey sk-...`", parse_mode="Markdown")
+        return
+
+    new_key = parts[1].strip()
+    test_client = OpenAI(api_key=new_key)
+
+    try:
+        _ = test_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=5
+        )
+        if new_key not in api_keys:
+            api_keys.append(new_key)
+            save_keys()
+        switch_to_key(api_keys.index(new_key))
+        bot.reply_to(message, "✅ Key hợp lệ và đã được thêm.")
+    except OpenAIError as e:
+        bot.reply_to(message, f"❌ Key không hợp lệ:\n{e}")
+
+# === XỬ LÝ TIN NHẮN AI ===
+@bot.message_handler(func=lambda m: True)
+def handle_ai(message):
+    content = message.text.strip()
+    wait_msg = bot.reply_to(message, "⏳ Đang xử lý...")
+    for attempt in range(len(api_keys)):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": content}],
+                max_tokens=1000
+            )
+            result = response.choices[0].message.content.strip()
+            bot.edit_message_text(result, chat_id=wait_msg.chat.id, message_id=wait_msg.message_id)
+            return
+        except OpenAIError as e:
+            logging.error(f"Lỗi key {current_key_index}: {e}")
+            if attempt < len(api_keys) - 1:
+                switch_to_key((current_key_index + 1) % len(api_keys))
+            else:
+                bot.edit_message_text(f"⚠️ Lỗi với tất cả key:\n{e}", chat_id=wait_msg.chat.id, message_id=wait_msg.message_id)
+
+# === CHẠY BOT ===
+logging.info("🤖 Bot Telegram đang chạy...")
+bot.infinity_polling(timeout=10, long_polling_timeout=5)
 def save_keys():
     with open(KEY_FILE, "w") as f:
         f.write("\n".join(api_keys))
