@@ -10,7 +10,7 @@ OPENAI_API_KEY = 'sk-proj-pO8wKgqxR8m2nx_MLRLGgZEUMDFEcwc6WvVtXyXPbXAuR1E9gOFZQq
 
 # === KHỞI TẠO BOT & OPENAI ===
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
-openai.api_key = OPENAI_API_KEY
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # === KÍCH HOẠT KEEP ALIVE ===
 keep_alive()
@@ -30,7 +30,7 @@ def get_uptime():
 # === XỬ LÝ LỆNH ===
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "\U0001F916 Xin chào! Tôi là trợ lý AI sử dụng GPT-4.\n\nGõ bất kỳ nội dung nào để tôi trả lời bạn.\n\nCác lệnh hỗ trợ:\n/start hoặc /help - Giới thiệu bot\n/uptime - Xem thời gian hoạt động của bot")
+    bot.reply_to(message, "🤖 Xin chào! Tôi là trợ lý AI sử dụng GPT-4.\n\nGõ bất kỳ nội dung nào để tôi trả lời bạn.\n\nLệnh hỗ trợ:\n/start hoặc /help - Giới thiệu bot\n/uptime - Xem thời gian hoạt động của bot")
 
 @bot.message_handler(commands=['uptime'])
 def send_uptime(message):
@@ -41,16 +41,16 @@ def send_uptime(message):
 def handle_message(message):
     logging.info(f"Người dùng: {message.from_user.username} | Nội dung: {message.text}")
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": message.text}]
         )
-        reply = response.choices[0].message['content']
+        reply = response.choices[0].message.content
         bot.reply_to(message, reply)
     except Exception as e:
         logging.error(f"Lỗi xử lý: {e}")
-        bot.reply_to(message, f"\u26A0\uFE0F Đã xảy ra lỗi: {e}")
+        bot.reply_to(message, f"⚠️ Đã xảy ra lỗi:\n\n{e}")
 
-# === KHỞI CHẠY BOT ===
-logging.info("\U0001F916 Bot Telegram AI đang chạy với GPT-4...")
+# === CHẠY BOT ===
+logging.info("🤖 Bot Telegram AI đang chạy với GPT-4...")
 bot.infinity_polling(timeout=10, long_polling_timeout=5)
