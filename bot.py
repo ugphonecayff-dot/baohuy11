@@ -9,7 +9,7 @@ import os
 
 # ========== CONFIG ==========
 TELEGRAM_TOKEN = "6367532329:AAGJh1RnIa-UZGBUdzKHTy3lyKnB81NdqjM"
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "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"
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ========== GIẢI MÃ ==========
@@ -74,12 +74,29 @@ async def ask_chatgpt(prompt):
     except Exception as e:
         return f"❌ Lỗi ChatGPT: {str(e)}"
 
+# ========== TỰ ĐỘNG TRẢ LỜI ==========
+PREDEFINED_RESPONSES = {
+    "xin chào": "Chào bạn! Tôi là bot trợ lý. Hãy gửi chuỗi mã hoá hoặc câu hỏi cần giải đáp.",
+    "help": "Bạn có thể gửi chuỗi mã hoá để giải mã, hoặc đặt câu hỏi để hỏi AI (ChatGPT).",
+    "ai là gì": "AI là trí tuệ nhân tạo (Artificial Intelligence). Tôi sử dụng AI để giúp bạn!"
+}
+
+def check_predefined_response(text):
+    key = text.lower().strip()
+    return PREDEFINED_RESPONSES.get(key, None)
+
 # ========== TELEGRAM HANDLERS ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Gửi tôi chuỗi mã hóa để giải mã, hoặc đặt câu hỏi để tôi hỏi AI!")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
+
+    predefined = check_predefined_response(text)
+    if predefined:
+        await update.message.reply_text(predefined)
+        return
+
     result, parsed = decode_languagemap(text)
 
     if parsed:
