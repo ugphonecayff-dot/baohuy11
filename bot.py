@@ -14,7 +14,7 @@ DEFAULT_KEY = os.getenv("OPENAI_API_KEY")
 # === CẤU HÌNH ===
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 keep_alive()
-ADMIN_IDS = [6367532329]
+ADMIN_IDS = [5736655322]
 KEY_FILE = "keys.txt"
 api_keys = []
 current_key_index = 0
