@@ -25,7 +25,7 @@ with TelegramClient(StringSession(), api_id, api_hash) as client:
         now = datetime.now(vietnam_tz)
 
         # Tạo tên mới với giờ phút giây
-        new_name = f"Bảo Huy Dev 🇻🇳 {now.strftime('%H:%M:%S - %d/%m/%Y')}"
+        new_name = f"Bảo Huy🇻🇳 {now.strftime('%H:%M:%S - %d/%m/%Y')}"
 
         # Gửi yêu cầu cập nhật tên
         client(UpdateProfileRequest(first_name=new_name))
