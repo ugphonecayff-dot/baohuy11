@@ -8,9 +8,13 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from keep_alive import keep_alive
 
-# ✅ TOKEN BOT và biến key dùng chung
+# ✅ TOKEN BOT và biến key GPT-4 dùng chung
 BOT_TOKEN = "6367532329:AAGJh1RnIa-UZGBUdzKHTy3lyKnB81NdqjM"
-shared_openai_key = None
+shared_openai_key = None  # Key GPT-4 dùng chung
+
+# ✅ Đường dẫn THEOS
+THEOS_PATH = "/home/ubuntu/theos"
+THEOS_MAKE_PATH = f"{THEOS_PATH}/make"
 
 # ✅ Logging
 logging.basicConfig(level=logging.INFO)
@@ -24,7 +28,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     "• Build Theos Tweak iOS\n"
                                     "Gửi câu hỏi hoặc file `.zip` Theos cho mình nhé!")
 
-# ✅ /addkey – admin gắn key GPT-4
+# ✅ /addkey – Admin gán key GPT-4 dùng chung
 async def add_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global shared_openai_key
     user_id = update.effective_user.id
@@ -56,7 +60,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        openai.api_key = shared_openai_key  # ✅ Gán đúng chỗ
+        openai.api_key = shared_openai_key
 
         response = openai.ChatCompletion.create(
             model="gpt-4",
@@ -77,13 +81,16 @@ def build_theos_project(path: str) -> str:
             ["make", "clean", "package"],
             cwd=path,
             stderr=subprocess.STDOUT,
-            env=dict(os.environ, THEOS="/home/ubuntu/theos")  # Đường dẫn THEOS
+            env=dict(os.environ,
+                     THEOS=THEOS_PATH,
+                     THEOS_MAKE_PATH=THEOS_MAKE_PATH)
         ).decode()
 
         for root, dirs, files in os.walk(path):
             for file in files:
                 if file.endswith(".deb"):
                     return os.path.join(root, file)
+
         return "BUILD_OK_NO_DEB"
 
     except subprocess.CalledProcessError as e:
@@ -92,7 +99,7 @@ def build_theos_project(path: str) -> str:
             f.write(e.output.decode())
         return error_path
 
-# ✅ Xử lý file ZIP gửi lên
+# ✅ Xử lý file .zip chứa Theos tweak
 async def handle_zip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file = await update.message.document.get_file()
     file_name = update.message.document.file_name
@@ -127,7 +134,7 @@ async def handle_zip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os.remove(zip_path)
         shutil.rmtree(extract_dir, ignore_errors=True)
 
-# ✅ Khởi chạy bot
+# ✅ Chạy bot
 def main():
     keep_alive()
 
