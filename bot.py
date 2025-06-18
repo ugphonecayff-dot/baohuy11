@@ -13,7 +13,7 @@ from keep_alive import keep_alive
 
 # === CONFIG ===
 BOT_TOKEN = "6367532329:AAGJh1RnIa-UZGBUdzKHTy3lyKnB81NdqjM"
-ADMIN_ID = 5736655322
+ADMIN_IDS = [6367532329, 5736655322]
 THEOS_DIR = os.path.expanduser("~/theos")
 TOOLCHAIN_BIN = os.path.join(THEOS_DIR, "toolchain", "bin", "arm64-apple-darwin14-clang")
 SDK_PATH = os.path.join(THEOS_DIR, "sdks", "iPhoneOS14.5.sdk")
@@ -65,18 +65,18 @@ def setup_theos():
         print("✅ Toolchain ready.")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 Send a Theos tweak `.zip` file. I will build a `.deb` for you!")
+    await update.message.reply_text("🤖 Gửi tệp `.zip` chứa Theos tweak, mình sẽ build thành `.deb` cho bạn!")
 
 async def setup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("⛔ You are not authorized to run this command.")
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("⛔ Bạn không có quyền dùng lệnh này.")
         return
-    await update.message.reply_text("🛠️ Installing Theos...")
+    await update.message.reply_text("🛠️ Đang cài đặt lại Theos...")
     try:
         setup_theos()
-        await update.message.reply_text("✅ Theos setup completed.")
+        await update.message.reply_text("✅ Cài đặt Theos hoàn tất.")
     except Exception as e:
-        await update.message.reply_text(f"❌ Setup error: {e}")
+        await update.message.reply_text(f"❌ Lỗi khi cài Theos: {e}")
 
 def build_theos_project(path: str) -> str:
     try:
@@ -105,7 +105,7 @@ async def handle_zip(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     os.makedirs("uploads", exist_ok=True)
     await file.download_to_drive(zip_path)
-    await update.message.reply_text("📦 Extracting and analyzing...")
+    await update.message.reply_text("📦 Đang giải nén và kiểm tra...")
 
     try:
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
@@ -121,34 +121,34 @@ async def handle_zip(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
 
         if not makefile_path:
-            await update.message.reply_text("❌ Makefile not found in .zip. Not a Theos project.")
+            await update.message.reply_text("❌ Không tìm thấy Makefile trong zip. Đây không phải Theos project.")
             return
 
         with open(makefile_path, "r") as f:
             content = f.read()
 
-        content = re.sub(r'^THEOS\s*=.*$', 'THEOS ?= $(THEOS)', content, flags=re.M)
-        content = content.replace("include /tweak.mk", "include $(THEOS_MAKE_PATH)/tweak.mk")
+        content = re.sub(r'^THEOS\s*=\s*\$\(THEOS\)', 'THEOS ?= $(THEOS)', content, flags=re.M)
+        content = re.sub(r'^include\s+/tweak\.mk', 'include $(THEOS_MAKE_PATH)/tweak.mk', content, flags=re.M)
 
         with open(makefile_path, "w") as f:
             f.write(content)
 
         build_dir = os.path.dirname(makefile_path)
-        await update.message.reply_text("🔧 Building tweak...")
+        await update.message.reply_text("🔧 Đang tiến hành build...")
 
         result = build_theos_project(build_dir)
 
         if result.endswith(".deb"):
-            await update.message.reply_text("✅ Build success! Here is your .deb:")
+            await update.message.reply_text("✅ Build thành công! Dưới đây là file .deb của bạn:")
             await update.message.reply_document(document=open(result, "rb"))
         elif result.endswith(".txt"):
-            await update.message.reply_text("❌ Build failed. See log:")
+            await update.message.reply_text("❌ Build thất bại! Gửi bạn log lỗi để kiểm tra:")
             await update.message.reply_document(document=open(result, "rb"))
         else:
-            await update.message.reply_text("✅ Build finished but no .deb found.")
+            await update.message.reply_text("✅ Build xong nhưng không tìm thấy file .deb.")
 
     except Exception as e:
-        await update.message.reply_text(f"❌ Error handling zip: {e}")
+        await update.message.reply_text(f"❌ Lỗi xử lý tệp: {e}")
     finally:
         try:
             os.remove(zip_path)
@@ -165,7 +165,7 @@ def main():
     app.add_handler(CommandHandler("setup", setup_command))
     app.add_handler(MessageHandler(filters.Document.ZIP, handle_zip))
 
-    print("🚀 Bot is ready.")
+    print("🚀 Bot đã sẵn sàng.")
     app.run_polling()
 
 if __name__ == "__main__":
