@@ -5,6 +5,7 @@ import subprocess
 import logging
 import urllib.request
 import tarfile
+import re
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
@@ -126,7 +127,7 @@ async def handle_zip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with open(makefile_path, "r") as f:
             content = f.read()
 
-        content = content.replace("THEOS = /home/tuananh/theos", "THEOS = $(THEOS)")
+        content = re.sub(r'^THEOS\s*=.*$', 'THEOS ?= $(THEOS)', content, flags=re.M)
         content = content.replace("include /tweak.mk", "include $(THEOS_MAKE_PATH)/tweak.mk")
 
         with open(makefile_path, "w") as f:
