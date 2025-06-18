@@ -29,7 +29,7 @@ async def add_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global shared_openai_key
     user_id = update.effective_user.id
 
-    if user_id != 6367532329:
+    if user_id != 5736655322:
         await update.message.reply_text("⛔ Bạn không có quyền sử dụng lệnh này.")
         return
 
