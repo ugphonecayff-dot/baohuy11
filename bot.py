@@ -37,8 +37,14 @@ async def add_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Dùng đúng cú pháp:\n`/addkey sk-xxxx...`", parse_mode="Markdown")
         return
 
-    shared_openai_key = context.args[0]
-    await update.message.reply_text("✅ Đã cập nhật key GPT-4 dùng chung.")
+    key = context.args[0]
+    try:
+        openai.api_key = key
+        openai.Model.list()  # kiểm tra key hợp lệ
+        shared_openai_key = key
+        await update.message.reply_text("✅ Key hợp lệ! Đã cập nhật key GPT-4 dùng chung.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Key không hợp lệ: {e}")
 
 # ✅ Hỏi đáp GPT-4
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -50,14 +56,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
+        openai.api_key = shared_openai_key  # ✅ Gán đúng chỗ
+
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": question}],
-            max_tokens=3000,
-            api_key=shared_openai_key
+            max_tokens=3000
         )
+
         answer = response.choices[0].message.content
         await update.message.reply_text(answer)
+
     except Exception as e:
         await update.message.reply_text(f"❌ Lỗi GPT-4: {e}")
 
