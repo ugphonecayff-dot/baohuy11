@@ -1,143 +1,162 @@
-import telebot, json, os
-from flask import Flask, request, render_template, redirect, url_for
+import telebot
+import json
+import os
 from datetime import datetime
-from config import BOT_TOKEN, ADMIN_IDS, MB_ACCOUNT, MB_BANK_CODE, WEBHOOK_SECRET
+from telebot import types
+from config import BOT_TOKEN, ADMIN_IDS, MB_ACCOUNT, MB_BANK_CODE
+from keep_alive import keep_alive
 
 bot = telebot.TeleBot(BOT_TOKEN)
-app = Flask(__name__)
+pending_users = {}
 
-KEYS_FILE = "keys.json"
-LOGS_FILE = "logs.json"
+PACKAGES = {
+    "7DAY": {"price": 30000, "label": "🔹 Gói 7 ngày – 30.000đ"},
+    "30DAY": {"price": 70000, "label": "🔸 Gói 30 ngày – 70.000đ"},
+    "365DAY": {"price": 250000, "label": "💎 Gói 365 ngày – 250.000đ"},
+}
 
-def load_json(f):
-    return json.load(open(f)) if os.path.exists(f) else []
+def load_keys():
+    if not os.path.exists("keys.json"):
+        with open("keys.json", "w") as f:
+            json.dump({}, f)
+    with open("keys.json", "r") as f:
+        return json.load(f)
 
-def save_json(f, d):
-    with open(f, "w") as file:
-        json.dump(d, file, indent=2)
+def save_keys(data):
+    with open("keys.json", "w") as f:
+        json.dump(data, f, indent=2)
 
-def get_key(pkg):
-    keys = load_json(KEYS_FILE)
-    if pkg in keys and keys[pkg]:
-        return keys[pkg].pop(0)
+def get_key(package):
+    data = load_keys()
+    if package in data and data[package]:
+        key = data[package].pop(0)
+        save_keys(data)
+        return key
     return None
 
-def save_keyfile(keys):
-    save_json(KEYS_FILE, keys)
-
-# ===== BOT COMMANDS =====
 @bot.message_handler(commands=["start"])
-def cmd_start(msg):
-    bot.reply_to(msg, "👋 Xin chào! Gửi /buy để chọn gói key bạn muốn mua.")
+def start(message):
+    bot.send_message(message.chat.id, "👋 Xin chào! Gửi /buy để chọn gói key bạn muốn mua.")
 
-@bot.message_handler(commands=["buy"])
-def cmd_buy(msg):
-    markup = telebot.types.InlineKeyboardMarkup()
-    packages = {
-        "7DAY": {"price": 30000, "label": "🔹 Gói 7 ngày – 30.000đ"},
-        "30DAY": {"price": 70000, "label": "🔸 Gói 30 ngày – 70.000đ"},
-        "365DAY": {"price": 250000, "label": "💎 Gói 365 ngày – 250.000đ"},
-    }
-    for k, v in packages.items():
-        markup.add(telebot.types.InlineKeyboardButton(v["label"], callback_data=f"buy_{k}"))
-    bot.send_message(msg.chat.id, "💰 Chọn gói key bạn muốn mua:", reply_markup=markup)
+@bot.message_handler(commands=['buy'])
+def handle_buy(message):
+    markup = types.InlineKeyboardMarkup()
+    for code, pkg in PACKAGES.items():
+        markup.add(types.InlineKeyboardButton(pkg["label"], callback_data=f"buy_{code}"))
+    bot.send_message(message.chat.id, "💰 Chọn gói key bạn muốn mua:", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith("buy_"))
-def cb_buy(call):
-    pkg = call.data.split("_")[1]
-    price = {"7DAY":30000,"30DAY":70000,"365DAY":250000}[pkg]
-    note = f"key-{pkg}-{call.from_user.id}"
-    url = f"https://img.vietqr.io/image/{MB_BANK_CODE}-{MB_ACCOUNT}-compact.png?amount={price}&addInfo={note}"
-    cap = f"📦 Gói: *{pkg}*\n💳 Số tiền: *{price}đ*\n🏦 MB Bank\n📄 Nội dung: `{note}`\n\nSau khi thanh toán, gửi ảnh CK tại đây!"
-    bot.send_photo(call.message.chat.id, url, caption=cap, parse_mode="Markdown")
+@bot.callback_query_handler(func=lambda call: call.data.startswith("buy_"))
+def handle_package_selected(call):
+    package_code = call.data.split("_")[1]
+    pending_users[call.from_user.id] = package_code
+    package = PACKAGES.get(package_code)
+    amount = package['price']
+    note = f"key-{package_code}-{call.from_user.id}"
+    qr_url = (
+        f"https://img.vietqr.io/image/{MB_BANK_CODE}-{MB_ACCOUNT}-compact.png"
+        f"?amount={amount}&addInfo={note}"
+    )
+    caption = (
+        f"📦 Gói đã chọn: *{package['label']}*\n"
+        f"💳 Số tiền: *{amount:,} VNĐ*\n"
+        f"🏦 Ngân hàng: *MB Bank*\n"
+        f"👤 STK: `{MB_ACCOUNT}`\n"
+        f"📄 Nội dung chuyển khoản: `{note}`\n\n"
+        f"📸 Quét mã VietQR để thanh toán rồi gửi ảnh.\n"
+        f"⏳ Chờ admin xác nhận sau khi gửi ảnh."
+    )
+    bot.send_photo(call.message.chat.id, qr_url, caption=caption, parse_mode="Markdown")
+    bot.answer_callback_query(call.id)
 
-# ===== ẢNH CK =====
 @bot.message_handler(content_types=["photo"])
 def handle_photo(msg):
-    logs = load_json(LOGS_FILE)
     uid = msg.from_user.id
-    fid = msg.photo[-1].file_id
-    guess = "7DAY" if "7" in (msg.caption or "") else "30DAY" if "30" in (msg.caption or "") else "365DAY"
-    entry = {
-        "user_id": uid, "username": msg.from_user.username,
-        "file_id": fid, "caption": msg.caption,
-        "status": "pending", "guess_package": guess,
-        "time": datetime.now().isoformat()
-    }
-    logs.append(entry)
-    save_json(LOGS_FILE, logs)
-    for admin in ADMIN_IDS:
-        btn = telebot.types.InlineKeyboardMarkup()
-        btn.add(telebot.types.InlineKeyboardButton("✅ Xác nhận", callback_data=f"confirm_{uid}_{guess}"))
-        bot.send_photo(admin, fid, caption=f"Ảnh từ @{msg.from_user.username}\nGói: {guess}", reply_markup=btn)
-    bot.reply_to(msg, "✅ Đã gửi ảnh, chờ admin xác nhận.")
+    username = msg.from_user.username or "Không rõ"
+    file_id = msg.photo[-1].file_id
+    pkg = pending_users.get(uid, "UNKNOWN")
+    amount = PACKAGES.get(pkg, {}).get("price", 0)
+    note = f"key-{pkg}-{uid}"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    logs = []
+    if os.path.exists("logs.json"):
+        with open("logs.json", "r") as f:
+            logs = json.load(f)
+    logs.append({
+        "user_id": uid,
+        "username": username,
+        "file_id": file_id,
+        "package": pkg,
+        "timestamp": timestamp,
+        "status": "pending"
+    })
+    with open("logs.json", "w") as f:
+        json.dump(logs, f, indent=2)
+
+    caption = (
+        f"🧾 Ảnh từ @{username}\n"
+        f"👤 ID: `{uid}`\n"
+        f"📦 Gói: *{pkg}*\n"
+        f"💰 Số tiền: *{amount:,}đ*\n"
+        f"📄 Nội dung: `{note}`\n"
+        f"🕒 Thời gian: `{timestamp}`"
+    )
+    btn = types.InlineKeyboardMarkup()
+    btn.add(types.InlineKeyboardButton("✅ Xác nhận", callback_data=f"confirm_{uid}_{pkg}"))
+
+    for admin_id in ADMIN_IDS:
+        bot.send_photo(admin_id, file_id, caption=caption, reply_markup=btn, parse_mode="Markdown")
+
+    bot.reply_to(msg, "✅ Đã nhận ảnh thanh toán. Chờ admin xác nhận.")
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("confirm_"))
-def confirm_cb(call):
-    uid, pkg = call.data.split("_")[1:]
-    key = get_key(pkg)
+def inline_confirm_callback(call):
+    _, user_id, package = call.data.split("_")
+    user_id = int(user_id)
+    key = get_key(package)
     if key:
-        bot.send_message(uid, f"🔑 Đây là key `{pkg}` của bạn:\n`{key}`", parse_mode="Markdown")
-        logs = load_json(LOGS_FILE)
-        for entry in reversed(logs):
-            if entry["user_id"] == int(uid) and entry["status"] == "pending":
-                entry["status"] = "confirmed"
-                break
-        save_json(LOGS_FILE, logs)
-        keys = load_json(KEYS_FILE)
-        save_keyfile(keys)
-        bot.answer_callback_query(call.id, "✅ Đã gửi key!")
+        bot.send_message(user_id, f"🔑 Đây là key `{package}` của bạn:\n\n`{key}`", parse_mode="Markdown")
+        bot.edit_message_caption("✅ Đã xác nhận và gửi key!", chat_id=call.message.chat.id, message_id=call.message.message_id)
     else:
-        bot.answer_callback_query(call.id, "❌ Hết key!")
+        bot.send_message(call.message.chat.id, f"❌ Hết key gói `{package}`.")
 
-# ===== WEB UI =====
-@app.route("/")
-def admin_ui():
-    logs = load_json(LOGS_FILE)[::-1]
-    keys = load_json(KEYS_FILE)
-    return render_template("index.html", logs=logs, keys=keys)
+@bot.message_handler(commands=["confirm"])
+def confirm_command(message):
+    if message.from_user.id not in ADMIN_IDS:
+        return bot.reply_to(message, "⛔ Bạn không có quyền.")
+    try:
+        _, uid, package = message.text.split()
+        uid = int(uid)
+        key = get_key(package)
+        if key:
+            bot.send_message(uid, f"🔑 Đây là key `{package}` của bạn:\n\n`{key}`", parse_mode="Markdown")
+            bot.reply_to(message, f"✅ Đã gửi key gói `{package}` cho user `{uid}`.", parse_mode="Markdown")
+        else:
+            bot.reply_to(message, f"❌ Hết key trong gói `{package}`.")
+    except:
+        bot.reply_to(message, "❗ Dùng đúng cú pháp: /confirm <user_id> <gói>")
 
-@app.route("/send_key", methods=["POST"])
-def web_sendkey():
-    uid, pkg = int(request.form["user_id"]), request.form["package"]
-    key = get_key(pkg)
-    if key:
-        bot.send_message(uid, f"🔑 Đây là key `{pkg}` của bạn:\n`{key}`", parse_mode="Markdown")
-        logs = load_json(LOGS_FILE)
-        for entry in reversed(logs):
-            if entry["user_id"] == uid and entry["status"] == "pending":
-                entry["status"] = "confirmed"
-                break
-        save_json(LOGS_FILE, logs)
-        save_keyfile(load_json(KEYS_FILE))
-    return redirect(url_for("admin_ui"))
+@bot.message_handler(commands=["addkey"])
+def addkey_command(message):
+    if message.from_user.id not in ADMIN_IDS:
+        return bot.reply_to(message, "⛔ Bạn không có quyền.")
+    msg = bot.reply_to(message, "📦 Nhập tên gói key muốn thêm (VD: 7DAY, 30DAY, 365DAY):")
+    bot.register_next_step_handler(msg, handle_package_input)
 
-@app.route("/add_keys", methods=["POST"])
-def add_keys():
-    pkg = request.form["package"].upper()
-    keys = [k.strip() for k in request.form["keys"].splitlines() if k.strip()]
-    all_keys = load_json(KEYS_FILE)
-    all_keys.setdefault(pkg, []).extend(keys)
-    save_keyfile(all_keys)
-    return redirect(url_for("admin_ui"))
+def handle_package_input(message):
+    package = message.text.strip().upper()
+    if package not in PACKAGES:
+        return bot.reply_to(message, "❗ Gói không hợp lệ.")
+    msg = bot.reply_to(message, f"📥 Gửi danh sách key cho gói `{package}` (mỗi dòng 1 key):", parse_mode="Markdown")
+    bot.register_next_step_handler(msg, lambda m: save_keys_for_package(m, package))
 
-# ===== WEBHOOK API =====
-@app.route("/webhook", methods=["POST"])
-def handle_webhook():
-    data = request.get_json()
-    if data.get("secret") != WEBHOOK_SECRET:
-        return {"error": "unauthorized"}, 403
-    uid, pkg = int(data["user_id"]), data["package"]
-    key = get_key(pkg)
-    if not key:
-        return {"error": "no key"}, 400
-    bot.send_message(uid, f"🔑 Đây là key `{pkg}` của bạn:\n`{key}`", parse_mode="Markdown")
-    save_keyfile(load_json(KEYS_FILE))
-    return {"status": "ok"}
+def save_keys_for_package(message, package):
+    new_keys = [k.strip() for k in message.text.strip().split("\n") if k.strip()]
+    data = load_keys()
+    data.setdefault(package, []).extend(new_keys)
+    save_keys(data)
+    bot.reply_to(message, f"✅ Đã thêm {len(new_keys)} key vào gói `{package}`.", parse_mode="Markdown")
 
-# ===== CHẠY BOT + WEB =====
-if __name__ == "__main__":
-    from threading import Thread
-    Thread(target=lambda: bot.infinity_polling()).start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+keep_alive()
+print("🤖 Bot is running...")
+bot.infinity_polling()
