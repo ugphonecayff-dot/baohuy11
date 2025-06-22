@@ -144,11 +144,27 @@ def addkey_command(message):
     bot.register_next_step_handler(msg, handle_package_input)
 
 def handle_package_input(message):
-    package = message.text.strip().upper()
-    if package not in PACKAGES:
-        return bot.reply_to(message, "❗ Gói không hợp lệ.")
-    msg = bot.reply_to(message, f"📥 Gửi danh sách key cho gói `{package}` (mỗi dòng 1 key):", parse_mode="Markdown")
-    bot.register_next_step_handler(msg, lambda m: save_keys_for_package(m, package))
+    user_input = message.text.strip().upper()
+
+    matched_package = None
+    for pkg in PACKAGES:
+        if user_input == pkg.upper():
+            matched_package = pkg
+            break
+
+    if not matched_package:
+        available = ", ".join(PACKAGES.keys())
+        return bot.reply_to(
+            message,
+            f"❗ Gói không hợp lệ.\n📦 Các gói hợp lệ: {available}"
+        )
+
+    msg = bot.reply_to(
+        message,
+        f"📥 Gửi danh sách key cho gói `{matched_package}` (mỗi dòng 1 key):",
+        parse_mode="Markdown"
+    )
+    bot.register_next_step_handler(msg, lambda m: save_keys_for_package(m, matched_package))
 
 def save_keys_for_package(message, package):
     new_keys = [k.strip() for k in message.text.strip().split("\n") if k.strip()]
