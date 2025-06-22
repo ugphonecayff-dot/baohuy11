@@ -36,7 +36,7 @@ def get_key(package):
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    bot.send_message(message.chat.id, "👋 Xin chào! Gửi /buy để chọn gói key bạn muốn mua.")
+    bot.send_message(message.chat.id, "👋 Xin chào! Gửi /buy để chọn gói key bạn muốn mua🔦")
 
 @bot.message_handler(commands=['buy'])
 def handle_buy(message):
