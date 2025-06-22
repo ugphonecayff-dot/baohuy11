@@ -1,8 +1,8 @@
-# ======================= IMPORT VÀ CẤU HÌNH ==========================
 import telebot
 import json
 import os
 from telebot import types
+from datetime import datetime
 from config import BOT_TOKEN, ADMIN_IDS
 from keep_alive import keep_alive
 
@@ -18,8 +18,11 @@ PACKAGES = {
 }
 
 KEYS_FILE = "keys.json"
+LOG_FILE = "logs.json"
+ANTI_SPAM_SECONDS = 15
+last_photo_time = {}
 
-# ======================= HÀM QUẢN LÝ KEY =============================
+# === Quản lý keys.json ===
 
 def load_keys():
     if not os.path.exists(KEYS_FILE):
@@ -40,24 +43,39 @@ def get_key(package):
         return key
     return None
 
-# ======================= /start – CHÀO MỪNG NGƯỜI DÙNG =============================
+# === Quản lý logs.json ===
+
+def load_logs():
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "w") as f:
+            json.dump([], f)
+    with open(LOG_FILE, "r") as f:
+        return json.load(f)
+
+def save_log(entry):
+    logs = load_logs()
+    logs.append(entry)
+    with open(LOG_FILE, "w") as f:
+        json.dump(logs, f, indent=2)
+
+# === /start ===
 
 @bot.message_handler(commands=["start"])
 def start(message):
     welcome_msg = (
-        "👋 *Chào mừng bạn đến với Bot Bán Key👨‍💻*\n\n"
+        "👋 *Chào mừng bạn đến với Bot Bán Key!*\n\n"
         "🧾 Các gói hiện có:\n"
-        "   🔹 *7 ngày* – 30.000đ\n"
-        "   🔸 *30 ngày* – 70.000đ\n"
-        "   💎 *365 ngày* – 250.000đ\n\n"
-        "📌 Gửi lệnh /buy để bắt đầu mua key\n"
-        "📸 Sau khi chuyển khoản, gửi ảnh cho admin xác nhận."
+        "🔹 *7 ngày* – 30.000đ\n"
+        "🔸 *30 ngày* – 70.000đ\n"
+        "💎 *365 ngày* – 250.000đ\n\n"
+        "Gửi /buy để bắt đầu mua key\n"
+        "Sau khi thanh toán, gửi ảnh chuyển khoản để admin xác nhận."
     )
     bot.send_message(message.chat.id, welcome_msg, parse_mode="Markdown")
 
-# ======================= /buy – CHỌN GÓI MUA KEY =============================
+# === /buy ===
 
-@bot.message_handler(commands=['buy'])
+@bot.message_handler(commands=["buy"])
 def handle_buy(message):
     markup = types.InlineKeyboardMarkup()
     for code, pkg in PACKAGES.items():
@@ -80,64 +98,144 @@ def handle_package_selected(call):
     )
 
     caption = (
-        f"📦 Gói đã chọn: *{package['label']}*\n"
+        f"📦 Gói: *{package['label']}*\n"
         f"💳 Số tiền: *{amount:,} VNĐ*\n"
         f"🏦 Ngân hàng: *MB Bank*\n"
         f"👤 STK: `{MB_ACCOUNT}`\n"
-        f"📄 Nội dung chuyển khoản: `{note}`\n\n"
-        f"📸 Quét mã VietQR dưới đây để thanh toán.\n"
-        f"⏳ Sau khi thanh toán, vui lòng chụp ảnh gửi lại để admin xác nhận."
+        f"📄 Nội dung: `{note}`\n\n"
+        f"📸 Quét mã VietQR để thanh toán. Sau đó gửi ảnh chuyển khoản cho bot!"
     )
     bot.send_photo(call.message.chat.id, qr_url, caption=caption, parse_mode="Markdown")
     bot.answer_callback_query(call.id)
 
-# ======================= /confirm – ADMIN XÁC NHẬN VÀ GỬI KEY =============================
+# === /confirm user_id gói ===
 
-@bot.message_handler(commands=['confirm'])
+@bot.message_handler(commands=["confirm"])
 def handle_confirm(message):
     if message.from_user.id not in ADMIN_IDS:
         return bot.reply_to(message, "⛔ Bạn không có quyền xác nhận.")
     try:
-        parts = message.text.split()
-        if len(parts) != 3:
-            return bot.reply_to(message, "❗ Dùng đúng cú pháp: /confirm <user_id> <gói>\nVí dụ: /confirm 123456789 30DAY")
-        user_id = int(parts[1])
-        package = parts[2].upper()
+        _, user_id, package = message.text.split()
+        user_id = int(user_id)
+        package = package.upper()
 
         key = get_key(package)
         if key:
-            bot.send_message(user_id, f"🔑 Cảm ơn bạn đã thanh toán!\nĐây là key `{package}` của bạn:\n\n`{key}`", parse_mode="Markdown")
-            bot.reply_to(message, f"✅ Đã gửi key gói {package} cho user `{user_id}`.", parse_mode="Markdown")
+            bot.send_message(user_id, f"🔑 Cảm ơn bạn!\nĐây là key `{package}` của bạn:\n\n`{key}`", parse_mode="Markdown")
+            bot.reply_to(message, f"✅ Đã gửi key `{package}` cho user `{user_id}`.", parse_mode="Markdown")
         else:
             bot.reply_to(message, f"❌ Hết key trong gói {package}.")
     except Exception as e:
-        bot.reply_to(message, f"⚠️ Lỗi: {str(e)}")
+        bot.reply_to(message, f"⚠️ Lỗi: {e}")
 
-# ======================= /addkey – ADMIN THÊM KEY =============================
+# === /addkey ===
 
 @bot.message_handler(commands=["addkey"])
 def addkey_command(message):
     if message.from_user.id not in ADMIN_IDS:
         return bot.reply_to(message, "⛔ Bạn không có quyền.")
-    msg = bot.reply_to(message, "📦 Nhập tên gói key muốn thêm (VD: 7DAY, 30DAY, 365DAY):")
+    msg = bot.reply_to(message, "📦 Nhập tên gói key (VD: 7DAY):")
     bot.register_next_step_handler(msg, handle_package_input)
 
 def handle_package_input(message):
     package = message.text.strip().upper()
-    msg = bot.reply_to(message, f"📥 Gửi danh sách key cho gói `{package}` (mỗi dòng 1 key):", parse_mode="Markdown")
+    msg = bot.reply_to(message, f"Gửi danh sách key cho gói `{package}` (mỗi dòng 1 key):", parse_mode="Markdown")
     bot.register_next_step_handler(msg, lambda m: save_keys_for_package(m, package))
 
 def save_keys_for_package(message, package):
-    new_keys = [k.strip() for k in message.text.strip().split("\n") if k.strip()]
+    keys = [k.strip() for k in message.text.strip().split("\n") if k.strip()]
     data = load_keys()
     if package not in data:
         data[package] = []
-    data[package].extend(new_keys)
+    data[package].extend(keys)
     save_keys(data)
-    bot.reply_to(message, f"✅ Đã thêm {len(new_keys)} key vào gói `{package}`.", parse_mode="Markdown")
+    bot.reply_to(message, f"✅ Đã thêm {len(keys)} key vào gói `{package}`.", parse_mode="Markdown")
 
-# ======================= KHỞI CHẠY BOT =============================
+# === 📸 Xử lý ảnh, log, chống spam, chống trùng ===
 
-keep_alive()
-print("🤖 Bot is running...")
-bot.infinity_polling()
+@bot.message_handler(content_types=["photo"])
+def handle_photo(message):
+    user = message.from_user
+    file_id = message.photo[-1].file_id
+    caption = message.caption or "Không có"
+    now = datetime.now()
+
+    # Anti-spam
+    if user.id in last_photo_time:
+        diff = (now - last_photo_time[user.id]).total_seconds()
+        if diff < ANTI_SPAM_SECONDS:
+            return bot.reply_to(message, f"⏱ Vui lòng đợi {ANTI_SPAM_SECONDS - int(diff)} giây trước khi gửi ảnh khác.")
+    last_photo_time[user.id] = now
+
+    # Kiểm tra trùng ảnh
+    logs = load_logs()
+    for entry in logs:
+        if entry["file_id"] == file_id:
+            return bot.reply_to(message, "⚠️ Ảnh này đã gửi trước đó. Vui lòng không gửi lại.")
+
+    # Gợi ý gói
+    guess = "UNKNOWN"
+    if "7" in caption:
+        guess = "7DAY"
+    elif "30" in caption:
+        guess = "30DAY"
+    elif "365" in caption:
+        guess = "365DAY"
+
+    # Log ảnh
+    entry = {
+        "user_id": user.id,
+        "username": user.username,
+        "file_id": file_id,
+        "caption": caption,
+        "status": "pending",
+        "guess_package": guess,
+        "time": now.isoformat()
+    }
+    save_log(entry)
+
+    # Nút xác nhận
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(
+        "✅ Xác nhận & Gửi key",
+        callback_data=f"confirmkey_{user.id}_{guess}"
+    ))
+
+    # Gửi ảnh tới admin
+    for admin in ADMIN_IDS:
+        bot.send_photo(admin, file_id,
+            caption=f"📸 Từ: @{user.username or 'Không có'} | ID: `{user.id}`\n📄 {caption}\n🎯 Gợi ý: `{guess}`",
+            parse_mode="Markdown", reply_markup=markup)
+
+    bot.reply_to(message, "✅ Đã gửi ảnh cho admin. Vui lòng chờ xác nhận.")
+
+# === 🔘 Xác nhận gửi key từ ảnh
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirmkey_"))
+def handle_confirm_button(call):
+    try:
+        _, user_id, package = call.data.split("_")
+        user_id = int(user_id)
+        package = package.upper()
+
+        key = get_key(package)
+        if not key:
+            return bot.answer_callback_query(call.id, "❌ Hết key!")
+
+        bot.send_message(user_id, f"🔑 Đây là key `{package}` của bạn:\n\n`{key}`", parse_mode="Markdown")
+        bot.send_message(call.message.chat.id, f"✅ Đã gửi key `{package}` cho user `{user_id}`.")
+
+        # Cập nhật log
+        logs = load_logs()
+        for entry in reversed(logs):
+            if entry["user_id"] == user_id and entry["status"] == "pending":
+                entry["status"] = "confirmed"
+                entry["confirmed_by"] = call.from_user.id
+                entry["confirmed_time"] = datetime.now().isoformat()
+                break
+        with open(LOG_FILE, "w") as f:
+            json.dump(logs, f, indent=2)
+
+        bot.answer_callback_query(call.id, "✅ Gửi thành công.")
+    except Exception as e:
+        bot.answer_callback_query(call.id, f"Lỗi: {e}")
