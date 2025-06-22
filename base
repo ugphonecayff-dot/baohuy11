@@ -1,0 +1,6 @@
+project/
+├── main.py           # File chính chạy bot
+├── config.py         # Cấu hình TOKEN & ADMIN
+├── keep_alive.py     # Duy trì bot hoạt động 24/7
+├── keys.json         # Lưu key theo gói
+├── requirements.txt  # Các thư viện cần cài
