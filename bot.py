@@ -1,4 +1,4 @@
-# main.py
+# ======================= IMPORT VÀ CẤU HÌNH ==========================
 import telebot
 import json
 import os
@@ -11,15 +11,15 @@ bot = telebot.TeleBot(BOT_TOKEN)
 MB_ACCOUNT = "0971487462"
 MB_BANK_CODE = "mbbank"
 
-# Gói key
 PACKAGES = {
     "7DAY": {"price": 30000, "label": "🔹 Gói 7 ngày – 30.000đ"},
-    "30DAY": {"price": 70000, "label": "🔸 Gói 30 ngày – 30.000đ"},
+    "30DAY": {"price": 70000, "label": "🔸 Gói 30 ngày – 70.000đ"},
     "365DAY": {"price": 250000, "label": "💎 Gói 365 ngày – 250.000đ"},
 }
 
-# === Quản lý key ===
 KEYS_FILE = "keys.json"
+
+# ======================= HÀM QUẢN LÝ KEY =============================
 
 def load_keys():
     if not os.path.exists(KEYS_FILE):
@@ -40,12 +40,23 @@ def get_key(package):
         return key
     return None
 
-# === /start ===
+# ======================= /start – CHÀO MỪNG NGƯỜI DÙNG =============================
+
 @bot.message_handler(commands=["start"])
 def start(message):
-    bot.send_message(message.chat.id, "👋 Xin chào! Gửi /buy để chọn gói key bạn muốn mua.")
+    welcome_msg = (
+        "👋 *Chào mừng bạn đến với Bot Bán Key👨‍💻*\n\n"
+        "🧾 Các gói hiện có:\n"
+        "   🔹 *7 ngày* – 30.000đ\n"
+        "   🔸 *30 ngày* – 70.000đ\n"
+        "   💎 *365 ngày* – 250.000đ\n\n"
+        "📌 Gửi lệnh /buy để bắt đầu mua key\n"
+        "📸 Sau khi chuyển khoản, gửi ảnh cho admin xác nhận."
+    )
+    bot.send_message(message.chat.id, welcome_msg, parse_mode="Markdown")
 
-# === /buy ===
+# ======================= /buy – CHỌN GÓI MUA KEY =============================
+
 @bot.message_handler(commands=['buy'])
 def handle_buy(message):
     markup = types.InlineKeyboardMarkup()
@@ -75,12 +86,13 @@ def handle_package_selected(call):
         f"👤 STK: `{MB_ACCOUNT}`\n"
         f"📄 Nội dung chuyển khoản: `{note}`\n\n"
         f"📸 Quét mã VietQR dưới đây để thanh toán.\n"
-        f"⏳ Sau khi thanh toán, admin sẽ xác nhận và gửi key!"
+        f"⏳ Sau khi thanh toán, vui lòng chụp ảnh gửi lại để admin xác nhận."
     )
     bot.send_photo(call.message.chat.id, qr_url, caption=caption, parse_mode="Markdown")
     bot.answer_callback_query(call.id)
 
-# === /confirm user_id gói ===
+# ======================= /confirm – ADMIN XÁC NHẬN VÀ GỬI KEY =============================
+
 @bot.message_handler(commands=['confirm'])
 def handle_confirm(message):
     if message.from_user.id not in ADMIN_IDS:
@@ -101,7 +113,8 @@ def handle_confirm(message):
     except Exception as e:
         bot.reply_to(message, f"⚠️ Lỗi: {str(e)}")
 
-# === /addkey ===
+# ======================= /addkey – ADMIN THÊM KEY =============================
+
 @bot.message_handler(commands=["addkey"])
 def addkey_command(message):
     if message.from_user.id not in ADMIN_IDS:
@@ -123,7 +136,8 @@ def save_keys_for_package(message, package):
     save_keys(data)
     bot.reply_to(message, f"✅ Đã thêm {len(new_keys)} key vào gói `{package}`.", parse_mode="Markdown")
 
-# === RUN ===
+# ======================= KHỞI CHẠY BOT =============================
+
 keep_alive()
 print("🤖 Bot is running...")
 bot.infinity_polling()
