@@ -1,178 +1,183 @@
-import telebot
 import json
 import os
-from datetime import datetime
-from telebot import types
-from config import BOT_TOKEN, ADMIN_IDS, MB_ACCOUNT, MB_BANK_CODE
+import random
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from keep_alive import keep_alive
+from dotenv import load_dotenv
 
-bot = telebot.TeleBot(BOT_TOKEN)
-pending_users = {}
+load_dotenv()
 
-PACKAGES = {
-    "7DAY": {"price": 30000, "label": "🔹 Gói 7 ngày – 30.000đ"},
-    "30DAY": {"price": 70000, "label": "🔸 Gói 30 ngày – 70.000đ"},
-    "365DAY": {"price": 250000, "label": "💎 Gói 365 ngày – 250.000đ"},
-}
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-def load_keys():
-    if not os.path.exists("keys.json"):
-        with open("keys.json", "w") as f:
-            json.dump({}, f)
-    with open("keys.json", "r") as f:
-        return json.load(f)
-
-def save_keys(data):
-    with open("keys.json", "w") as f:
-        json.dump(data, f, indent=2)
-
-def get_key(package):
-    data = load_keys()
-    if package in data and data[package]:
-        key = data[package].pop(0)
-        save_keys(data)
-        return key
-    return None
-
-@bot.message_handler(commands=["start"])
-def start(message):
-    bot.send_message(message.chat.id, "👋 Xin chào! Gửi /buy để chọn gói key bạn muốn mua🔦")
-
-@bot.message_handler(commands=['buy'])
-def handle_buy(message):
-    markup = types.InlineKeyboardMarkup()
-    for code, pkg in PACKAGES.items():
-        markup.add(types.InlineKeyboardButton(pkg["label"], callback_data=f"buy_{code}"))
-    bot.send_message(message.chat.id, "💰 Chọn gói key bạn muốn mua:", reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("buy_"))
-def handle_package_selected(call):
-    package_code = call.data.split("_")[1]
-    pending_users[call.from_user.id] = package_code
-    package = PACKAGES.get(package_code)
-    amount = package['price']
-    note = f"key-{package_code}-{call.from_user.id}"
-    qr_url = (
-        f"https://img.vietqr.io/image/{MB_BANK_CODE}-{MB_ACCOUNT}-compact.png"
-        f"?amount={amount}&addInfo={note}"
-    )
-    caption = (
-        f"📦 Gói đã chọn: *{package['label']}*\n"
-        f"💳 Số tiền: *{amount:,} VNĐ*\n"
-        f"🏦 Ngân hàng: *MB Bank*\n"
-        f"👤 STK: `{MB_ACCOUNT}`\n"
-        f"📄 Nội dung chuyển khoản: `{note}`\n\n"
-        f"📸 Quét mã VietQR để thanh toán rồi gửi ảnh.\n"
-        f"⏳ Chờ admin xác nhận sau khi gửi ảnh."
-    )
-    bot.send_photo(call.message.chat.id, qr_url, caption=caption, parse_mode="Markdown")
-    bot.answer_callback_query(call.id)
-
-@bot.message_handler(content_types=["photo"])
-def handle_photo(msg):
-    uid = msg.from_user.id
-    username = msg.from_user.username or "Không rõ"
-    file_id = msg.photo[-1].file_id
-    pkg = pending_users.get(uid, "UNKNOWN")
-    amount = PACKAGES.get(pkg, {}).get("price", 0)
-    note = f"key-{pkg}-{uid}"
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    logs = []
-    if os.path.exists("logs.json"):
-        with open("logs.json", "r") as f:
-            logs = json.load(f)
-    logs.append({
-        "user_id": uid,
-        "username": username,
-        "file_id": file_id,
-        "package": pkg,
-        "timestamp": timestamp,
-        "status": "pending"
-    })
-    with open("logs.json", "w") as f:
-        json.dump(logs, f, indent=2)
-
-    caption = (
-        f"🧾 Ảnh từ @{username}\n"
-        f"👤 ID: `{uid}`\n"
-        f"📦 Gói: *{pkg}*\n"
-        f"💰 Số tiền: *{amount:,}đ*\n"
-        f"📄 Nội dung: `{note}`\n"
-        f"🕒 Thời gian: `{timestamp}`"
-    )
-    btn = types.InlineKeyboardMarkup()
-    btn.add(types.InlineKeyboardButton("✅ Xác nhận", callback_data=f"confirm_{uid}_{pkg}"))
-
-    for admin_id in ADMIN_IDS:
-        bot.send_photo(admin_id, file_id, caption=caption, reply_markup=btn, parse_mode="Markdown")
-
-    bot.reply_to(msg, "✅ Đã nhận ảnh thanh toán. Chờ admin xác nhận.")
-
-@bot.callback_query_handler(func=lambda c: c.data.startswith("confirm_"))
-def inline_confirm_callback(call):
-    _, user_id, package = call.data.split("_")
-    user_id = int(user_id)
-    key = get_key(package)
-    if key:
-        bot.send_message(user_id, f"🔑 Đây là key `{package}` của bạn:\n\n`{key}`", parse_mode="Markdown")
-        bot.edit_message_caption("✅ Đã xác nhận và gửi key!", chat_id=call.message.chat.id, message_id=call.message.message_id)
-    else:
-        bot.send_message(call.message.chat.id, f"❌ Hết key gói `{package}`.")
-
-@bot.message_handler(commands=["confirm"])
-def confirm_command(message):
-    if message.from_user.id not in ADMIN_IDS:
-        return bot.reply_to(message, "⛔ Bạn không có quyền.")
+def load_json(file):
     try:
-        _, uid, package = message.text.split()
-        uid = int(uid)
-        key = get_key(package)
-        if key:
-            bot.send_message(uid, f"🔑 Đây là key `{package}` của bạn:\n\n`{key}`", parse_mode="Markdown")
-            bot.reply_to(message, f"✅ Đã gửi key gói `{package}` cho user `{uid}`.", parse_mode="Markdown")
-        else:
-            bot.reply_to(message, f"❌ Hết key trong gói `{package}`.")
+        with open(file, 'r') as f:
+            return json.load(f)
     except:
-        bot.reply_to(message, "❗ Dùng đúng cú pháp: /confirm <user_id> <gói>")
+        return []
 
-@bot.message_handler(commands=["addkey"])
-def addkey_command(message):
-    if message.from_user.id not in ADMIN_IDS:
-        return bot.reply_to(message, "⛔ Bạn không có quyền.")
-    msg = bot.reply_to(message, "📦 Nhập tên gói key muốn thêm (VD: 7DAY, 30DAY, 365DAY):")
-    bot.register_next_step_handler(msg, handle_package_input)
+def save_json(file, data):
+    with open(file, 'w') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-def handle_package_input(message):
-    user_input = message.text.strip().upper()
+def is_admin(user_id):
+    users = load_json('users.json')
+    for user in users:
+        if user['id'] == user_id and user['role'] == 'admin':
+            return True
+    return False
 
-    matched_package = None
-    for pkg in PACKAGES:
-        if user_input == pkg.upper():
-            matched_package = pkg
-            break
-
-    if not matched_package:
-        available = ", ".join(PACKAGES.keys())
-        return bot.reply_to(
-            message,
-            f"❗ Gói không hợp lệ.\n📦 Các gói hợp lệ: {available}"
-        )
-
-    msg = bot.reply_to(
-        message,
-        f"📥 Gửi danh sách key cho gói `{matched_package}` (mỗi dòng 1 key):",
-        parse_mode="Markdown"
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Chào mừng bạn đến shop acc Liên Quân!\n\n"
+        "/listacc - Xem acc đang bán\n"
+        "/buy <id> - Mua acc theo ID\n"
+        "/random - Mua acc ngẫu nhiên\n"
+        "/myacc - Xem acc đã mua\n\n"
+        "Quản lý (Admin):\n"
+        "/addacc <taikhoan> <matkhau> <gia> - Thêm acc\n"
+        "/editacc <id> <gia> - Sửa giá acc\n"
+        "/delacc <id> - Xóa acc\n"
+        "/stats - Xem thống kê\n"
+        "/xacnhan <acc_id> <user_id> - Xác nhận thanh toán"
     )
-    bot.register_next_step_handler(msg, lambda m: save_keys_for_package(m, matched_package))
 
-def save_keys_for_package(message, package):
-    new_keys = [k.strip() for k in message.text.strip().split("\n") if k.strip()]
-    data = load_keys()
-    data.setdefault(package, []).extend(new_keys)
-    save_keys(data)
-    bot.reply_to(message, f"✅ Đã thêm {len(new_keys)} key vào gói `{package}`.", parse_mode="Markdown")
+async def listacc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    accounts = load_json('acc.json')
+    text = "Danh sách acc đang bán:\n"
+    for acc in accounts:
+        if acc['trangthai'] == 'chua_ban':
+            text += f"ID: {acc['id']} | Giá: {acc['gia']} VND\n"
+    if text == "Danh sách acc đang bán:\n":
+        text = "Hiện tại không có acc nào đang bán."
+    await update.message.reply_text(text)
 
-keep_alive()
-print("🤖 Bot is running...")
-bot.infinity_polling()
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) == 0:
+        await update.message.reply_text("Vui lòng nhập ID acc muốn mua: /buy <id>")
+        return
+
+    try:
+        acc_id = int(context.args[0])
+    except:
+        await update.message.reply_text("Vui lòng nhập ID hợp lệ.")
+        return
+
+    accounts = load_json('acc.json')
+    for acc in accounts:
+        if acc['id'] == acc_id:
+            if acc['trangthai'] == 'da_ban':
+                await update.message.reply_text("Acc này đã được bán rồi!")
+                return
+
+            orders = load_json('orders.json')
+            orders.append({
+                "acc_id": acc_id,
+                "user_id": update.message.from_user.id,
+                "gia": acc['gia'],
+                "trangthai": "cho_duyet"
+            })
+            save_json('orders.json', orders)
+
+            await update.message.reply_text(f"Đơn hàng đã được tạo!\n\nVui lòng chuyển khoản {acc['gia']} VND vào số tài khoản sau:\n\n"
+                                            "🏦 Ngân hàng: MB Bank\n"
+                                            "🔢 Số tài khoản: 123456789\n"
+                                            "👤 Chủ tài khoản: NGUYEN VAN A\n"
+                                            f"📌 Nội dung chuyển khoản: {update.message.from_user.id}\n\nSau khi chuyển, admin sẽ duyệt đơn cho bạn.")
+            await context.bot.send_message(chat_id=ADMIN_ID, text=f"📥 Đơn hàng mới:\nUser: {update.message.from_user.id}\nAcc ID: {acc_id}\nGiá: {acc['gia']} VND")
+            return
+
+    await update.message.reply_text("Không tìm thấy acc với ID này.")
+
+async def random_acc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    accounts = load_json('acc.json')
+    available = [acc for acc in accounts if acc['trangthai'] == 'chua_ban']
+
+    if not available:
+        await update.message.reply_text("Hiện tại không còn acc nào để random.")
+        return
+
+    acc = random.choice(available)
+
+    orders = load_json('orders.json')
+    orders.append({
+        "acc_id": acc['id'],
+        "user_id": update.message.from_user.id,
+        "gia": acc['gia'],
+        "trangthai": "cho_duyet"
+    })
+    save_json('orders.json', orders)
+
+    await update.message.reply_text(f"Đơn hàng random đã được tạo!\n\nVui lòng chuyển khoản {acc['gia']} VND vào số tài khoản sau:\n\n"
+                                    "🏦 Ngân hàng: MB Bank\n"
+                                    "🔢 Số tài khoản: 0971487462\n"
+                                    "👤 Chủ tài khoản: Ngo Quang Khai\n"
+                                    f"📌 Nội dung chuyển khoản: {update.message.from_user.id}\n\nSau khi chuyển, admin sẽ duyệt đơn cho bạn.")
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"📥 Đơn hàng random:\nUser: {update.message.from_user.id}\nAcc ID: {acc['id']}\nGiá: {acc['gia']} VND")
+
+async def myacc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    accounts = load_json('acc.json')
+    text = "Acc bạn đã mua:\n"
+    found = False
+    for acc in accounts:
+        if acc.get('nguoi_mua') == user_id:
+            text += f"ID: {acc['id']} | Tài khoản: {acc['taikhoan']} | Mật khẩu: {acc['matkhau']} | Giá: {acc['gia']} VND\n"
+            found = True
+
+    if found:
+        await update.message.reply_text(text)
+    else:
+        await update.message.reply_text("Bạn chưa mua acc nào.")
+
+async def xacnhan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.message.from_user.id):
+        await update.message.reply_text("Bạn không có quyền xác nhận!")
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text("Cú pháp: /xacnhan <acc_id> <user_id>")
+        return
+
+    try:
+        acc_id = int(context.args[0])
+        user_id = int(context.args[1])
+    except:
+        await update.message.reply_text("ID phải là số!")
+        return
+
+    accounts = load_json('acc.json')
+    orders = load_json('orders.json')
+
+    for order in orders:
+        if order['acc_id'] == acc_id and order['user_id'] == user_id and order['trangthai'] == "cho_duyet":
+            for acc in accounts:
+                if acc['id'] == acc_id:
+                    acc['trangthai'] = 'da_ban'
+                    acc['nguoi_mua'] = user_id
+                    order['trangthai'] = 'da_duyet'
+                    save_json('acc.json', accounts)
+                    save_json('orders.json', orders)
+
+                    await context.bot.send_message(chat_id=user_id, text=f"✅ Đơn hàng của bạn đã được xác nhận!\n\nTài khoản: {acc['taikhoan']}\nMật khẩu: {acc['matkhau']}")
+                    await update.message.reply_text("✅ Đã giao acc cho khách thành công.")
+                    return
+
+    await update.message.reply_text("Không tìm thấy đơn hàng hợp lệ.")
+
+if __name__ == '__main__':
+    keep_alive()
+
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler('start', start))
+    app.add_handler(CommandHandler('listacc', listacc))
+    app.add_handler(CommandHandler('buy', buy))
+    app.add_handler(CommandHandler('random', random_acc))
+    app.add_handler(CommandHandler('myacc', myacc))
+    app.add_handler(CommandHandler('xacnhan', xacnhan))
+
+    print("Bot đang chạy...")
+    app.run_polling()
