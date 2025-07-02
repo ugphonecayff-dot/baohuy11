@@ -150,7 +150,7 @@ async def random_acc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     acc = random.choice(available_accounts)
-    acc_price = 5000  # Giá mỗi acc random
+    acc_price = 2000  # Giá mỗi acc random
 
     if balance < acc_price:
         await update.message.reply_text(f"Bạn không đủ tiền! Mỗi acc random có giá {acc_price} VND.")
