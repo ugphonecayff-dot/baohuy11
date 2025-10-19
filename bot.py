@@ -1,6 +1,5 @@
 import requests
 import asyncio
-import matplotlib.pyplot as plt
 from telegram import Bot, error
 from keep_alive import keep_alive
 
@@ -28,35 +27,14 @@ async def send_msg(msg: str):
     except Exception as e:
         print(f"❌ Lỗi khác khi gửi tin nhắn: {e}")
 
-# === Gửi biểu đồ ===
-async def send_chart():
-    if not history:
-        return
-    try:
-        plt.figure(figsize=(8, 4), facecolor="white")
-        plt.plot(history, marker="o", color="black", linestyle="-")
-        plt.title("Biểu đồ Tài/Xỉu gần đây", color="black")
-        plt.xlabel("Phiên", color="black")
-        plt.ylabel("Kết quả", color="black")
-        plt.grid(True, linestyle="--", alpha=0.5)
-
-        plt.yticks([0, 1], ["Xỉu", "Tài"])
-        plt.savefig("chart.png", facecolor="white")
-        plt.close()
-
-        with open("chart.png", "rb") as img:
-            await bot.send_photo(chat_id=CHAT_ID, photo=img)
-        print("📊 Đã gửi biểu đồ vào Telegram")
-
-    except Exception as e:
-        print(f"❌ Lỗi khi gửi ảnh: {e}")
-
 # === Lấy dữ liệu API ===
 def get_result():
     try:
         res = requests.get(API_URL, timeout=10)
         if res.status_code == 200:
-            return res.json()
+            data = res.json()
+            print("📥 API trả về:", data)  # log để debug
+            return data
         else:
             print(f"⚠️ API trả về mã {res.status_code}")
     except Exception as e:
@@ -121,7 +99,6 @@ async def main():
                     history.pop(0)
 
                 await send_msg(msg)
-                await send_chart()
                 last_phien = phien
         else:
             print("⏳ Chưa có dữ liệu mới...")
@@ -131,4 +108,3 @@ async def main():
 if __name__ == "__main__":
     keep_alive()
     asyncio.run(main())
-    
