@@ -96,7 +96,7 @@ async def auto_send_results():
             phien_sunwin = sunwin_data.get("Phien")
             if phien_sunwin and phien_sunwin != last_phien_sunwin:
                 last_phien_sunwin = phien_sunwin
-                await send_result("b52", sunwin_data, history_sunwin)
+                await send_result("hittx", sunwin_data, history_sunwin)
 
         if md5_data:
             phien_md5 = md5_data.get("Phien")
