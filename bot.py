@@ -15,28 +15,75 @@ history = []
 # Emoji xúc xắc
 dice_map = {1:"⚀",2:"⚁",3:"⚂",4:"⚃",5:"⚄",6:"⚅"}
 
-# GIFs & Memes
-GIF_ROLL = "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif"
-GIF_TAI = "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif"
-GIF_XIU = "https://media.giphy.com/media/3o7abldj0b3rxrZUxW/giphy.gif"
-GIF_WIN = "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif"
-GIF_LOSE = "https://media.giphy.com/media/9Y5BbDSkSTiY8/giphy.gif"
+# === GIFs & Memes ===
 
-MEME_FUNNY = ["https://i.imgflip.com/30zz5g.jpg","https://i.imgflip.com/4/4acd.jpg"]
-MEME_SAD = ["https://i.imgflip.com/1ur9b0.jpg","https://i.imgflip.com/3vzej.jpg"]
-MEME_TAI = ["https://i.imgflip.com/6b8q.jpg"]
-MEME_XIU = ["https://i.imgflip.com/4acd.jpg"]
-MEME_CHAIN = ["https://i.imgflip.com/4t0m5.jpg"]  # meme cháy cầu 🔥
+# GIF xúc xắc lăn
+GIF_ROLL = [
+    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
+    "https://media.giphy.com/media/13CoXDiaCcCoyk/giphy.gif",
+]
 
-# === Gửi tin nhắn ===
+# GIF Tài / Xỉu
+GIF_TAI = [
+    "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif",
+    "https://media.giphy.com/media/l41lFw057lAJQMwg0/giphy.gif",
+]
+GIF_XIU = [
+    "https://media.giphy.com/media/3o7abldj0b3rxrZUxW/giphy.gif",
+    "https://media.giphy.com/media/26tPplGWjN0xLybiU/giphy.gif",
+]
+
+# GIF Win / Lose
+GIF_WIN = [
+    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif",
+    "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif",
+]
+GIF_LOSE = [
+    "https://media.giphy.com/media/9Y5BbDSkSTiY8/giphy.gif",
+    "https://media.giphy.com/media/d2lcHJTG5Tscg/giphy.gif",
+]
+
+# Meme vui
+MEME_FUNNY = [
+    "https://i.imgflip.com/30zz5g.jpg",
+    "https://i.imgflip.com/4/4acd.jpg",
+    "https://i.imgflip.com/1bij.jpg",
+    "https://i.imgflip.com/26am.jpg",
+]
+
+# Meme buồn
+MEME_SAD = [
+    "https://i.imgflip.com/1ur9b0.jpg",
+    "https://i.imgflip.com/3vzej.jpg",
+    "https://i.imgflip.com/2fm6x.jpg",
+]
+
+# Meme riêng cho Tài & Xỉu
+MEME_TAI = [
+    "https://i.imgflip.com/6b8q.jpg",
+    "https://i.imgflip.com/7kzog.jpg",
+]
+MEME_XIU = [
+    "https://i.imgflip.com/4acd.jpg",
+    "https://i.imgflip.com/3si4.jpg",
+]
+
+# Meme cháy cầu 🔥
+MEME_CHAIN = [
+    "https://i.imgflip.com/4t0m5.jpg",
+    "https://i.imgflip.com/28j0te.jpg",
+    "https://i.imgflip.com/2wifvo.jpg",
+]
+
+# === Gửi text ===
 async def send_msg(msg: str):
     try:
         await bot.send_message(chat_id=CHAT_ID, text=msg)
     except Exception as e:
         print(f"❌ Lỗi send_msg: {e}")
 
-# === Gửi ảnh/GIF và tự xóa ===
-async def send_temp_media(url: str, delay: int = 15):
+# === Gửi media và auto xóa sau 3s ===
+async def send_temp_media(url: str, delay: int = 3):
     try:
         if url.endswith(".gif"):
             m = await bot.send_animation(chat_id=CHAT_ID, animation=url)
@@ -94,29 +141,29 @@ async def main():
                 history.append(1 if ket_qua=="Tài" else 0)
                 if len(history)>30: history.pop(0)
 
-                # Gửi xúc xắc (tự xóa)
-                asyncio.create_task(send_temp_media(GIF_ROLL, delay=8))
+                # Xúc xắc lăn 🎲
+                asyncio.create_task(send_temp_media(random.choice(GIF_ROLL)))
 
-                # Gửi kết quả text (giữ lại)
+                # Tin nhắn kết quả
                 await send_msg(msg)
 
-                # Gửi GIF theo kết quả (tự xóa)
+                # GIF theo kết quả
                 if ket_qua=="Tài":
-                    asyncio.create_task(send_temp_media(GIF_TAI))
+                    asyncio.create_task(send_temp_media(random.choice(GIF_TAI)))
                     asyncio.create_task(send_temp_media(random.choice(MEME_TAI)))
                 else:
-                    asyncio.create_task(send_temp_media(GIF_XIU))
+                    asyncio.create_task(send_temp_media(random.choice(GIF_XIU)))
                     asyncio.create_task(send_temp_media(random.choice(MEME_XIU)))
 
-                # Gửi meme thắng/thua (tự xóa)
+                # Win / Lose meme
                 if ket_qua==du_doan:
-                    asyncio.create_task(send_temp_media(GIF_WIN))
+                    asyncio.create_task(send_temp_media(random.choice(GIF_WIN)))
                     asyncio.create_task(send_temp_media(random.choice(MEME_FUNNY)))
                 else:
-                    asyncio.create_task(send_temp_media(GIF_LOSE))
+                    asyncio.create_task(send_temp_media(random.choice(GIF_LOSE)))
                     asyncio.create_task(send_temp_media(random.choice(MEME_SAD)))
 
-                # Meme cháy cầu (nếu chuỗi >=5)
+                # Meme cháy cầu (nếu >=5)
                 if streak_count >= 5:
                     asyncio.create_task(send_temp_media(random.choice(MEME_CHAIN)))
 
