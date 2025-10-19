@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = "8080338995:AAHYQHo0lSry8MupGC0RJt_o8kLbRDiYjQQ"
 CHAT_ID = -1002666964512
 
-API_SUNWIN = "https://hitclub-pre.onrender.com/api/taixiu"
+API_B52 = "https://hitclub-pre.onrender.com/api/taixiu"
 API_HITMD5 = "https://hitclub-pre.onrender.com/api/taixiumd5"
 
 bot = Bot(token=TOKEN)
