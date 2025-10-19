@@ -1,5 +1,6 @@
 import requests
 import asyncio
+import random
 from telegram import Bot, error
 from keep_alive import keep_alive
 
@@ -9,95 +10,77 @@ CHAT_ID = "-1002666964512"
 API_URL = "https://binhtool-b52predict.onrender.com/api/taixiu"
 
 bot = Bot(token=TELEGRAM_TOKEN)
-history = []   # Lưu kết quả Tài/Xỉu (1 = Tài, 0 = Xỉu)
+history = []
 
 # Emoji xúc xắc
-dice_map = {
-    1: "⚀", 2: "⚁", 3: "⚂",
-    4: "⚃", 5: "⚄", 6: "⚅"
-}
+dice_map = {1:"⚀",2:"⚁",3:"⚂",4:"⚃",5:"⚄",6:"⚅"}
 
-# === GIFs ===
-GIF_ROLL = "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif"  # xúc xắc lăn
-GIF_TAI = "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif"   # kết quả Tài
-GIF_XIU = "https://media.giphy.com/media/3o7abldj0b3rxrZUxW/giphy.gif"   # kết quả Xỉu
-GIF_WIN = "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif"       # đúng dự đoán 🎉
-GIF_LOSE = "https://media.giphy.com/media/9Y5BbDSkSTiY8/giphy.gif"       # sai dự đoán 😢
+# GIFs & Memes
+GIF_ROLL = "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif"
+GIF_TAI = "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif"
+GIF_XIU = "https://media.giphy.com/media/3o7abldj0b3rxrZUxW/giphy.gif"
+GIF_WIN = "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif"
+GIF_LOSE = "https://media.giphy.com/media/9Y5BbDSkSTiY8/giphy.gif"
+
+MEME_FUNNY = ["https://i.imgflip.com/30zz5g.jpg","https://i.imgflip.com/4/4acd.jpg"]
+MEME_SAD = ["https://i.imgflip.com/1ur9b0.jpg","https://i.imgflip.com/3vzej.jpg"]
+MEME_TAI = ["https://i.imgflip.com/6b8q.jpg"]
+MEME_XIU = ["https://i.imgflip.com/4acd.jpg"]
+MEME_CHAIN = ["https://i.imgflip.com/4t0m5.jpg"]  # meme cháy cầu 🔥
 
 # === Gửi tin nhắn ===
 async def send_msg(msg: str):
     try:
         await bot.send_message(chat_id=CHAT_ID, text=msg)
-        print("📩 Đã gửi tin nhắn vào Telegram")
-    except error.TelegramError as e:
-        print(f"❌ Lỗi Telegram: {e}")
     except Exception as e:
-        print(f"❌ Lỗi khác khi gửi tin nhắn: {e}")
+        print(f"❌ Lỗi send_msg: {e}")
 
-# === Gửi GIF ===
-async def send_gif(url: str):
+# === Gửi ảnh/GIF và tự xóa ===
+async def send_temp_media(url: str, delay: int = 15):
     try:
-        await bot.send_animation(chat_id=CHAT_ID, animation=url)
-        print("📩 Đã gửi GIF:", url)
+        if url.endswith(".gif"):
+            m = await bot.send_animation(chat_id=CHAT_ID, animation=url)
+        else:
+            m = await bot.send_photo(chat_id=CHAT_ID, photo=url)
+        await asyncio.sleep(delay)
+        await bot.delete_message(chat_id=CHAT_ID, message_id=m.message_id)
     except Exception as e:
-        print(f"❌ Lỗi khi gửi GIF: {e}")
+        print(f"❌ Lỗi send_temp_media: {e}")
 
-# === Lấy dữ liệu API ===
+# === API ===
 def get_result():
     try:
         res = requests.get(API_URL, timeout=10)
         if res.status_code == 200:
-            data = res.json()
-            print("📥 API trả về:", data)
-            return data
-        else:
-            print(f"⚠️ API trả về mã {res.status_code}")
+            return res.json()
     except Exception as e:
         print("❌ API lỗi:", e)
     return None
 
 # === Tìm chuỗi liên tiếp ===
 def find_streak(history):
-    if not history:
-        return "Chưa có dữ liệu"
+    if not history: return 0, "Chưa có dữ liệu"
     last = history[-1]
     count = 1
-    for i in range(len(history) - 2, -1, -1):
-        if history[i] == last:
-            count += 1
-        else:
-            break
-    return f"🔥 Chuỗi {count} { 'Tài' if last == 1 else 'Xỉu' } liên tiếp"
+    for i in range(len(history)-2,-1,-1):
+        if history[i] == last: count += 1
+        else: break
+    return count, f"🔥 Chuỗi {count} { 'Tài' if last==1 else 'Xỉu'} liên tiếp"
 
-# === Format dữ liệu API ===
+# === Format ===
 def format_result(data):
-    if not data:
-        return None
-
+    if not data: return None
     phien = data.get("phien")
-    xx1 = data.get("Xuc_xac_1")
-    xx2 = data.get("Xuc_xac_2")
-    xx3 = data.get("Xuc_xac_3")
-    tong = data.get("Tong")
-    ket_qua = data.get("Ket_qua")
-    du_doan = data.get("Du_doan")
-
-    if not (phien and xx1 and xx2 and xx3 and tong and ket_qua and du_doan):
-        print("⚠️ API trả thiếu dữ liệu, bỏ qua...")
-        return None
-
-    icon = "🔴" if ket_qua == "Tài" else "🔵"
-    dice_emojis = f"{dice_map.get(xx1, xx1)} + {dice_map.get(xx2, xx2)} + {dice_map.get(xx3, xx3)}"
-    streak = find_streak(history + [1 if ket_qua == "Tài" else 0])
-
-    msg = (
-        f"🆔 Phiên: {phien}\n"
-        f"🎲 Xúc xắc: {dice_emojis}\n"
-        f"➕ Tổng: {tong} ⇒ {icon} {ket_qua}\n"
-        f"🔮 Dự đoán tiếp: {du_doan}\n"
-        f"{streak}"
-    )
-    return msg, phien, ket_qua, du_doan
+    xx1,xx2,xx3 = data.get("Xuc_xac_1"),data.get("Xuc_xac_2"),data.get("Xuc_xac_3")
+    tong,ket_qua,du_doan = data.get("Tong"),data.get("Ket_qua"),data.get("Du_doan")
+    if not all([phien,xx1,xx2,xx3,tong,ket_qua,du_doan]): return None
+    icon = "🔴" if ket_qua=="Tài" else "🔵"
+    dice = f"{dice_map[xx1]} + {dice_map[xx2]} + {dice_map[xx3]}"
+    streak_count, streak_txt = find_streak(history+[1 if ket_qua=="Tài" else 0])
+    msg = (f"🆔 Phiên: {phien}\n🎲 Xúc xắc: {dice}\n"
+           f"➕ Tổng: {tong} ⇒ {icon} {ket_qua}\n"
+           f"🔮 Dự đoán tiếp: {du_doan}\n{streak_txt}")
+    return msg, phien, ket_qua, du_doan, streak_count
 
 # === Main loop ===
 async def main():
@@ -105,40 +88,42 @@ async def main():
     while True:
         data = get_result()
         result = format_result(data)
-
         if result:
-            msg, phien, ket_qua, du_doan = result
-            if phien != last_phien:  # chỉ gửi khi có phiên mới
-                history.append(1 if ket_qua == "Tài" else 0)
-                if len(history) > 30:
-                    history.pop(0)
+            msg, phien, ket_qua, du_doan, streak_count = result
+            if phien != last_phien:
+                history.append(1 if ket_qua=="Tài" else 0)
+                if len(history)>30: history.pop(0)
 
-                # 1. Gửi GIF xúc xắc lăn
-                await send_gif(GIF_ROLL)
-                await asyncio.sleep(3)
+                # Gửi xúc xắc (tự xóa)
+                asyncio.create_task(send_temp_media(GIF_ROLL, delay=8))
 
-                # 2. Gửi tin nhắn kết quả
+                # Gửi kết quả text (giữ lại)
                 await send_msg(msg)
 
-                # 3. Gửi GIF kết quả
-                if ket_qua == "Tài":
-                    await send_gif(GIF_TAI)
+                # Gửi GIF theo kết quả (tự xóa)
+                if ket_qua=="Tài":
+                    asyncio.create_task(send_temp_media(GIF_TAI))
+                    asyncio.create_task(send_temp_media(random.choice(MEME_TAI)))
                 else:
-                    await send_gif(GIF_XIU)
+                    asyncio.create_task(send_temp_media(GIF_XIU))
+                    asyncio.create_task(send_temp_media(random.choice(MEME_XIU)))
 
-                # 4. Gửi GIF đúng/sai dự đoán
-                if ket_qua == du_doan:
-                    await send_gif(GIF_WIN)
+                # Gửi meme thắng/thua (tự xóa)
+                if ket_qua==du_doan:
+                    asyncio.create_task(send_temp_media(GIF_WIN))
+                    asyncio.create_task(send_temp_media(random.choice(MEME_FUNNY)))
                 else:
-                    await send_gif(GIF_LOSE)
+                    asyncio.create_task(send_temp_media(GIF_LOSE))
+                    asyncio.create_task(send_temp_media(random.choice(MEME_SAD)))
+
+                # Meme cháy cầu (nếu chuỗi >=5)
+                if streak_count >= 5:
+                    asyncio.create_task(send_temp_media(random.choice(MEME_CHAIN)))
 
                 last_phien = phien
-        else:
-            print("⏳ Chưa có dữ liệu mới...")
-
         await asyncio.sleep(5)
 
-if __name__ == "__main__":
+if __name__=="__main__":
     keep_alive()
     asyncio.run(main())
     
