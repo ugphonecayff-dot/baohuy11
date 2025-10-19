@@ -9,3 +9,4 @@ dotenv
 telethon
 pytz
 openai
+nest_asyncio
