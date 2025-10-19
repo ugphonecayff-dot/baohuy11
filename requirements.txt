@@ -10,3 +10,4 @@ telethon
 pytz
 openai
 nest_asyncio
+matplotlib
